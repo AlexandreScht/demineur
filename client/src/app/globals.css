@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.blink-anim {
+  animation: blink 1s infinite;
+}
+
+.glitch-effect {
+  position: relative;
+}
+
+/* Hiding scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Also hide scrollbar for body generally if desired, or just utility */
+body::-webkit-scrollbar {
+  display: none;
+}
+body {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
