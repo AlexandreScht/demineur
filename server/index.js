@@ -10,6 +10,8 @@ const app = express();
 app.use(cors());
 
 app.get('/', (req, res) => {
+  console.log('Server is alive timer');
+  
   res.send('Server is alive');
 });
 
