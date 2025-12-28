@@ -78,7 +78,6 @@ class MinesweeperGame {
           flag: 0, 
           scanned: null,
           neighborCount: 0,
-          quantumRange: null,
           lyingNumbers: null
         }))
       );
@@ -204,11 +203,6 @@ class MinesweeperGame {
     // Re-calculate numbers after adding new mines
     this.calculateNumbers();
     
-    // Application du mode Quantum (Uncertainty) - Restricted to Hardcore difficulty as requested
-    if (this.mode === 'hardcore' && this.difficulty === 'hardcore') {
-      this.applyQuantumUncertainty(); 
-    }
-
     // Application de la difficulté "Hardcore" (Lying Numbers)
     if (this.difficulty === 'hardcore') {
         this.applyLyingNumbers();
@@ -287,29 +281,7 @@ class MinesweeperGame {
     }
   }
 
-  // Logique Signature : Le Mode Quantum
-  applyQuantumUncertainty() {
-    for (let y = 0; y < this.rows; y++) {
-      for (let x = 0; x < this.cols; x++) {
-        const cell = this.grid[y][x];
-        // ~20% des cases deviennent instables et ne sont pas des mines
-        if (!cell.isMine && cell.neighborCount > 0 && Math.random() < 0.2) {
-            // Créer une plage ambigüe (ex: si 3, afficher "2-3" ou "3-4")
-            const offset = Math.random() < 0.5 ? -1 : 1;
-            let fakeNumber = cell.neighborCount + offset;
-            
-            // S'assurer que le faux nombre reste logique (pas < 0 ou > 8)
-            if (fakeNumber < 0) fakeNumber = 1; 
-            if (fakeNumber > 8) fakeNumber = 7;
 
-            const min = Math.min(cell.neighborCount, fakeNumber);
-            const max = Math.max(cell.neighborCount, fakeNumber);
-            
-            cell.quantumRange = `${min}-${max}`; 
-        }
-      }
-    }
-  }
 
   // Logique "Hardcore Difficulty": Lying Numbers
   applyLyingNumbers() {
@@ -318,8 +290,8 @@ class MinesweeperGame {
               const cell = this.grid[y][x];
               
               // Appliquer seulement sur les cases sûres avec des voisins (>0)
-              // ~25% de chance d'avoir un "nombre menteur"
-              if (!cell.isMine && cell.neighborCount > 0 && Math.random() < 0.25) {
+              // ~12.5% de chance d'avoir un "nombre menteur" (Reduced by 50% from 0.25)
+              if (!cell.isMine && cell.neighborCount > 0 && Math.random() < 0.125) {
                   const trueNum = cell.neighborCount;
                   let fakeNum;
                   

@@ -5,7 +5,6 @@ export interface CellData {
     isOpen: boolean;
     flag: number; // 0: none, 1: flag, 2: question
     neighborCount: number;
-    quantumRange?: string | null;
     lyingNumbers?: number[] | null;
     scanned?: 'mine' | 'safe' | null;
 }

@@ -29,7 +29,7 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
                 styleClass = "bg-red-950/20 border-red-800"; 
                 content = (
                     <div className="relative flex items-center justify-center w-full h-full">
-                        <Flag className="w-6 h-6 text-red-500 relative z-10 drop-shadow-md" />
+                        <Flag className="w-6 h-6 text-red-600/80 relative z-10 drop-shadow-md" />
                     </div>
                 );
             } else {
@@ -37,9 +37,7 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
             }
         } else if (cell.neighborCount > 0) {
             // Quantum display, Lying numbers or Normal
-            if (cell.quantumRange) {
-                content = <span className="text-yellow-400 font-mono text-sm tracking-tighter opacity-80 blink-anim">{cell.quantumRange}</span>;
-            } else if (cell.lyingNumbers) {
+            if (cell.lyingNumbers) {
                 content = (
                     <div className="flex items-center justify-center gap-[0.12rem] w-full h-full">
                         <span className="text-xs md:text-sm font-black text-orange-400 drop-shadow-sm">{cell.lyingNumbers[0]}</span>
@@ -57,7 +55,7 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
         }
     } else {
         // Closed State
-        if (cell.flag === 1) content = <Flag className="w-6 h-6 text-red-500" />;
+        if (cell.flag === 1) content = <Flag className="w-6 h-6 text-red-600/80" />;
         if (cell.flag === 2) content = <HelpCircle className="w-7 h-7 text-violet-400" />;
         if (cell.scanned === 'mine') {
             styleClass = "bg-red-800/30 border-2 border-red-900";
