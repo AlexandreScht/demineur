@@ -1,0 +1,49 @@
+name: App CI/CD & Keep Alive
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    # Keep-alive cron: runs every 14 minutes
+    - cron: "*/14 * * * *"
+    - cron: "*/16 * * * *"
+  workflow_dispatch:
+
+jobs:
+  # ------------------------------------------------------------------
+  # JOB 1: KEEPALIVE (Runs on Schedule)
+  # ------------------------------------------------------------------
+  ping_server:
+    name: Ping Render (Keep Alive)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        env:
+          URL: ${{ secrets.RENDER_BACKEND_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "RENDER_BACKEND_URL secret not set. Skipping ping."
+            exit 0
+          fi
+          curl -I "$URL/"
+          echo "Ping sent to $URL"
+
+  # ------------------------------------------------------------------
+  # JOB 2: DEPLOY SERVER (Runs on Push to Main)
+  # ------------------------------------------------------------------
+  deploy_server:
+    name: Deploy Server (Render)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Hook
+        env:
+          deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$deploy_url" ]; then
+            echo "RENDER_DEPLOY_HOOK secret not set. Skipping deploy."
+            exit 0
+          fi
+          curl -X POST "$deploy_url"
+          echo "Render deploy triggered successfully."
