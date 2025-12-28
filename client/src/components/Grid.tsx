@@ -111,8 +111,9 @@ export default function Grid({ grid, roomId, isScanning, onScan }: GridProps) {
         if (now - lastEmit.current < 30) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
-        const y = e.clientY - rect.top + e.currentTarget.scrollTop;
+        // Calculate percentage (0-100) relative to the container size
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
 
         socket.emit('cursor_move', { x, y, roomId });
         lastEmit.current = now;
@@ -164,7 +165,7 @@ export default function Grid({ grid, roomId, isScanning, onScan }: GridProps) {
                 <div 
                     key={id}
                     className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear"
-                    style={{ left: pos.x, top: pos.y }}
+                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
                      <MousePointer2 
                         className="w-8 h-8 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)] text-yellow-400 fill-yellow-400/20" 
