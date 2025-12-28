@@ -1,5 +1,4 @@
 const { spawn } = require('child_process');
-const http = require('http');
 
 function startServer() {
   console.log('Starting server...');
@@ -27,8 +26,6 @@ function startServer() {
     const minTime = 5 * 60 * 1000;
     const maxTime = 10 * 60 * 1000;
     const nextPing = Math.floor(Math.random() * (maxTime - minTime + 1)) + minTime;
-    
-    console.log(`Next ping in ${(nextPing / 60000).toFixed(2)} minutes.`);
     setTimeout(performPing, nextPing);
   };
 

@@ -137,13 +137,6 @@ io.on('connection', (socket) => {
                // Prepare next level
                const lastRow = game.grid[game.rows - 1];
                game.initializeNextLevel(lastRow);
-               
-               // Emit Level Complete event with new grid and score
-               // We include 'mines' because generation might change it (though logic says consistent, roughening might vary)
-               // Actually initializeNextLevel resets generation, so mines will be 0 until first click?
-               // game.initializeNextLevel sets isGenerated = false.
-               // So new grid is empty (except row 0).
-               // Frontend should display this.
                io.to(roomId).emit('level_complete', { 
                    grid: game.grid, 
                    score: games[roomId].score,
@@ -183,7 +176,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3005;
+const PORT = process.env.PORT || 3005;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

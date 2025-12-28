@@ -145,7 +145,7 @@ export default function Home() {
         
         <div className="z-10 flex flex-col items-center gap-8 w-full max-w-lg">
             <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent tracking-tighter text-center mb-4 drop-shadow-lg">
-                QUANTUM SWEEP
+                DEMINEURS V2
             </h1>
             
             {!setupMode ? (
@@ -167,7 +167,7 @@ export default function Home() {
                         <div className="absolute inset-0 bg-purple-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
                         <div className="flex items-center gap-2 relative z-10">
                             <Zap className="w-6 h-6 text-yellow-400 animate-pulse" />
-                            <span className="text-2xl font-bold text-purple-400 group-hover:text-white transition-colors">QUANTUM MODE</span>
+                            <span className="text-2xl font-bold text-purple-400 group-hover:text-white transition-colors">INFINITE MODE</span>
                         </div>
                         <span className="text-slate-400 text-sm relative z-10">Uncertainty & Ambiguous numbers.</span>
                     </button>
@@ -343,7 +343,7 @@ export default function Home() {
                         className="bg-slate-900 border border-red-500/50 p-8 rounded-2xl max-w-md w-full text-center shadow-[0_0_50px_rgba(239,68,68,0.2)]"
                     >
                         <h2 className="text-5xl font-black text-red-500 mb-2">CRITICAL FAILURE</h2>
-                        <p className="text-slate-400 mb-8 text-lg">Signal Lost. Quantum coherence collapsed.</p>
+                        <p className="text-slate-400 mb-8 text-lg">You Failed ! (looser)</p>
                         
                         <div className="flex flex-col gap-3">
                             {setupMode && (
@@ -351,14 +351,14 @@ export default function Home() {
                                     onClick={restartGame}
                                     className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-black text-xl transition-all rounded-lg shadow-lg hover:shadow-red-500/50"
                                 >
-                                    RETRY MISSION
+                                    RETRY
                                 </button>
                             )}
                             <button 
                                 onClick={leaveRoom}
                                 className="w-full py-4 bg-white text-black font-black text-xl hover:bg-slate-200 transition-colors rounded-lg"
                             >
-                                RETURN TO BASE
+                                RETURN TO HOME
                             </button>
                         </div>
                     </motion.div>
