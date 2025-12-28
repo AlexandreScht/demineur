@@ -9,6 +9,10 @@ const { generateNextRow } = require('./infiniteLogic');
 const app = express();
 app.use(cors());
 
+app.get('/', (req, res) => {
+  res.send('Server is alive');
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
