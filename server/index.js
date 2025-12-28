@@ -51,7 +51,8 @@ io.on('connection', (socket) => {
             hp: games[roomId].hp,
             rows: games[roomId].rows,
             cols: games[roomId].cols,
-            mines: games[roomId].minesCount, // Re-added
+            mines: games[roomId].minesCount, 
+            scansAvailable: games[roomId].scansAvailable, // Scanner count
             role: 'P1'
       });
   });
@@ -71,7 +72,8 @@ io.on('connection', (socket) => {
             hp: games[roomId].hp,
             rows: games[roomId].rows,
             cols: games[roomId].cols,
-            mines: games[roomId].minesCount, // Re-added
+            mines: games[roomId].minesCount, 
+            scansAvailable: games[roomId].scansAvailable, // Scanner count
             role: 'P2' 
         });
     } else {
@@ -107,6 +109,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('scan_cell', ({ x, y, roomId }) => {
+    const game = games[roomId];
+    if (!game) return;
+    if (game.hp <= 0) return;
+
+    const result = game.scanCell(x, y);
+    if (result) {
+        // Emit updated grid cell (with scanned property) AND updated scan count
+        io.to(roomId).emit('update_grid', [result.cell]);
+        io.to(roomId).emit('update_scans', { scansAvailable: result.scansAvailable });
+    }
+  });
+
   socket.on('click_cell', ({ x, y, roomId }) => {
     const game = games[roomId];
     if (!game) return;
@@ -123,7 +138,18 @@ io.on('connection', (socket) => {
        // Gestion des HP partagés 
        game.hp -= 1;
        io.to(roomId).emit('explosion', { x, y, hp: game.hp });
-       if (game.hp <= 0) io.to(roomId).emit('game_over');
+       if (game.hp <= 0) {
+           // Reveal all mines
+           const allMines = [];
+           for(let r=0; r<game.rows; r++) {
+               for(let c=0; c<game.cols; c++) {
+                   if(game.grid[r][c].isMine) {
+                       allMines.push({ ...game.grid[r][c], isOpen: true });
+                   }
+               }
+           }
+           io.to(roomId).emit('game_over', { mines: allMines });
+       }
     } else {
        io.to(roomId).emit('update_grid', result.changes);
        
@@ -140,7 +166,8 @@ io.on('connection', (socket) => {
                io.to(roomId).emit('level_complete', { 
                    grid: game.grid, 
                    score: games[roomId].score,
-                   mines: game.minesCount // This is target count
+                   mines: game.minesCount,
+                   scansAvailable: game.scansAvailable // Reset to 1
                });
            } else {
                // Classic Win (Optional, just clear for now or simple alert)
@@ -166,8 +193,10 @@ io.on('connection', (socket) => {
         grid: games[roomId].grid, 
         hp: games[roomId].hp,
         rows: games[roomId].rows,
+        rows: games[roomId].rows,
         cols: games[roomId].cols,
-        mines: games[roomId].minesCount // Re-added
+        mines: games[roomId].minesCount,
+        scansAvailable: games[roomId].scansAvailable
     });
   });
 

@@ -7,6 +7,7 @@ export interface CellData {
     neighborCount: number;
     quantumRange?: string | null;
     lyingNumbers?: number[] | null;
+    scanned?: 'mine' | 'safe' | null;
 }
 
 export type GridData = CellData[][];
@@ -17,5 +18,6 @@ export interface GameInitData {
     rows: number;
     cols: number;
     mines: number;
+    scansAvailable?: number;
     role?: 'P1' | 'P2';
 }

@@ -11,6 +11,9 @@ import { MousePointer2 } from 'lucide-react';
 interface GridProps {
   grid: GridData;
   roomId: string;
+  isScanning: boolean;
+  onScan: () => void;
+  myRole?: 'P1' | 'P2' | null;
 }
 
 const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => void, onRightClick: (e: React.MouseEvent) => void }) => {
@@ -21,8 +24,17 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
     if (cell.isOpen) {
         styleClass = "bg-slate-800";
         if (cell.isMine) {
-            content = <Bomb className="w-5 h-5 text-red-500" />;
-            styleClass = "bg-red-900/50 border-red-500";
+            styleClass = "bg-red-900/30 border-red-800";
+            if (cell.flag === 1) {
+                styleClass = "bg-red-950/20 border-red-800"; 
+                content = (
+                    <div className="relative flex items-center justify-center w-full h-full">
+                        <Flag className="w-6 h-6 text-red-500 relative z-10 drop-shadow-md" />
+                    </div>
+                );
+            } else {
+                content = <Bomb className="w-5 h-5 text-red-700" />;
+            }
         } else if (cell.neighborCount > 0) {
             // Quantum display, Lying numbers or Normal
             if (cell.quantumRange) {
@@ -44,8 +56,14 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
             }
         }
     } else {
+        // Closed State
         if (cell.flag === 1) content = <Flag className="w-6 h-6 text-red-500" />;
         if (cell.flag === 2) content = <HelpCircle className="w-7 h-7 text-violet-400" />;
+        if (cell.scanned === 'mine') {
+            styleClass = "bg-red-800/30 border-2 border-red-900";
+        } else if (cell.scanned === 'safe') {
+            styleClass = "bg-green-500/50 border-2 border-green-700";
+        }
     }
 
     return (
@@ -67,15 +85,7 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
     );
 };
 
-interface GridProps {
-  grid: GridData;
-  roomId: string;
-  myRole: 'P1' | 'P2' | null;
-}
-
-// ... Cell component ...
-
-export default function Grid({ grid, roomId }: GridProps) {
+export default function Grid({ grid, roomId, isScanning, onScan }: GridProps) {
     const [cursors, setCursors] = useState<{ [id: string]: { x: number, y: number, role: 'P1'|'P2' } }>({});
     const lastEmit = useRef(0);
 
@@ -115,7 +125,12 @@ export default function Grid({ grid, roomId }: GridProps) {
     };
 
     const handleCellClick = (x: number, y: number) => {
-        socket.emit('click_cell', { x, y, roomId });
+        if (isScanning) {
+            socket.emit('scan_cell', { x, y, roomId });
+            onScan();
+        } else {
+            socket.emit('click_cell', { x, y, roomId });
+        }
     };
 
     const handleRightClick = (e: React.MouseEvent, x: number, y: number) => {

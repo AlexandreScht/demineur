@@ -5,7 +5,7 @@ import { socket } from '@/utils/socket';
 import { GridData, CellData, GameInitData } from '@/utils/types';
 import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
-import { Activity, Zap, Heart, Flag as FlagIcon } from 'lucide-react';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar } from 'lucide-react';
 
 export default function Home() {
   const [inRoom, setInRoom] = useState(false);
@@ -24,6 +24,11 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [score, setScore] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  
+  // Scanner state
+  const [scansAvailable, setScansAvailable] = useState(0);
+  const [isScanning, setIsScanning] = useState(false);
 
   const handleCopyRoomId = () => {
       navigator.clipboard.writeText(roomId);
@@ -41,7 +46,9 @@ export default function Home() {
     function onRoomCreated(id: string) {
       setRoomId(id);
       setInRoom(true);
+      setInRoom(true);
       setIsGameOver(false);
+      setShowGameOverModal(false);
       setScore(0);
     }
     // ... existing listeners ...
@@ -49,8 +56,12 @@ export default function Home() {
         setGrid(data.grid);
         setHp(data.hp);
         setInRoom(true);
+        setInRoom(true);
         setIsGameOver(false);
+        setShowGameOverModal(false);
         setMinesCount(data.mines); 
+        setScansAvailable(data.scansAvailable || 0);
+        setIsScanning(false); 
         if (data.role) setMyRole(data.role);
         setScore(0);
     };
@@ -65,7 +76,7 @@ export default function Home() {
         });
     }
     
-    function onLevelComplete({ grid: newGrid, score: newScore, mines }: { grid: GridData, score: number, mines: number }) {
+    function onLevelComplete({ grid: newGrid, score: newScore, mines, scansAvailable }: { grid: GridData, score: number, mines: number, scansAvailable?: number }) {
         setIsTransitioning(true);
         // Play success sound?
         
@@ -74,6 +85,8 @@ export default function Home() {
             setGrid(newGrid);
             setScore(newScore);
             setMinesCount(mines);
+            if (scansAvailable !== undefined) setScansAvailable(scansAvailable);
+            setIsScanning(false);
             setIsTransitioning(false);
         }, 1000); // 1s animation duration
     }
@@ -84,18 +97,35 @@ export default function Home() {
         setTimeout(() => setIsExploding(false), 500);
     }
 
-    function onGameOver() {
+    function onGameOver({ mines }: { mines: CellData[]}) {
         setIsGameOver(true);
+        setShowGameOverModal(true);
+        if (mines) {
+            setGrid(prev => {
+                const newGrid = [...prev];
+                mines.forEach(mine => {
+                    newGrid[mine.y][mine.x] = { ...mine, isOpen: true }; // Force open visually
+                });
+                return newGrid;
+            });
+        }
     }
 
     function onUpdateMines({ mines }: { mines: number }) {
         setMinesCount(mines);
+    }
+    
+    function onUpdateScans({ scansAvailable }: { scansAvailable: number }) {
+        setScansAvailable(scansAvailable);
+        // If no scans left, disable scanning mode
+        if (scansAvailable <= 0) setIsScanning(false);
     }
 
     socket.on('room_created', onRoomCreated);
     socket.on('init_game', onInitGame);
     socket.on('update_grid', onUpdateGrid);
     socket.on('update_mines', onUpdateMines);
+    socket.on('update_scans', onUpdateScans);
     socket.on('level_complete', onLevelComplete);
     socket.on('explosion', onExplosion);
     socket.on('game_over', onGameOver);
@@ -105,6 +135,7 @@ export default function Home() {
       socket.off('init_game', onInitGame);
       socket.off('update_grid', onUpdateGrid);
       socket.off('update_mines', onUpdateMines);
+      socket.off('update_scans', onUpdateScans);
       socket.off('level_complete', onLevelComplete);
       socket.off('explosion', onExplosion);
       socket.off('game_over', onGameOver);
@@ -135,6 +166,7 @@ export default function Home() {
       if (!setupMode) return;
       socket.emit('restart_game', { roomId, mode: setupMode, difficulty, hp: customHp });
       setIsGameOver(false); 
+      setShowGameOverModal(false); 
   };
 
   if (!inRoom) {
@@ -281,6 +313,22 @@ export default function Home() {
                    <FlagIcon className="w-5 h-5 text-red-500 fill-red-500" />
              </div>
 
+              {/* Scanner Control */}
+              <button 
+                  onClick={() => scansAvailable > 0 && setIsScanning(!isScanning)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                      isScanning 
+                      ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.3)]' 
+                      : scansAvailable > 0
+                        ? 'bg-slate-900/50 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-500'
+                        : 'bg-slate-900/30 border-slate-800 text-slate-600 cursor-not-allowed'
+                  }`}
+                  title="Scanner Tool"
+              >
+                   <Radar className={`w-5 h-5 ${isScanning ? 'animate-spin-slow' : ''}`} />
+                   <span className="font-mono font-bold text-xl">{scansAvailable}</span>
+              </button>
+
              <div 
                  onClick={handleCopyRoomId}
                  className="text-sm font-mono text-slate-400 hidden md:flex items-center gap-2 cursor-pointer hover:text-slate-200 transition-colors active:scale-95 transform relative"
@@ -321,7 +369,13 @@ export default function Home() {
             transition={{ duration: 1.0, ease: "easeInOut" }}
             className="w-full flex justify-center"
        >
-           <Grid grid={grid} roomId={roomId} myRole={myRole} />
+           <Grid grid={grid} roomId={roomId} myRole={myRole} isScanning={isScanning} onScan={() => {
+               // Optional: Trigger sound or effect
+               setIsScanning(false); // Disable after one use? Or keep enabled? Req says "cliquer sur la case voulut", implies single action.
+               // Actually user says "si un joueur utilise le scan et qu'il y en as plus..." so let's keep it enabled until count is 0.
+               // Logic inside Grid handles the click. But here we might want to auto-disable if count hits 0 (handled in onUpdateScans).
+               // Let's just pass prop.
+           }} />
        </motion.div>
 
       <div className="fixed bottom-4 right-4 text-xs text-slate-600">
@@ -330,7 +384,7 @@ export default function Home() {
 
        {/* GAME OVER OVERLAY */}
        <AnimatePresence>
-            {isGameOver && (
+            {isGameOver && showGameOverModal && (
                 <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -355,6 +409,12 @@ export default function Home() {
                                 </button>
                             )}
                             <button 
+                                onClick={() => setShowGameOverModal(false)}
+                                className="w-full py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xl transition-colors rounded-lg"
+                            >
+                                VIEW BOARD
+                            </button>
+                            <button 
                                 onClick={leaveRoom}
                                 className="w-full py-4 bg-white text-black font-black text-xl hover:bg-slate-200 transition-colors rounded-lg"
                             >
@@ -362,6 +422,44 @@ export default function Home() {
                             </button>
                         </div>
                     </motion.div>
+                </motion.div>
+            )}
+
+            {/* PERSISTENT GAME OVER CONTROLS (When modal is closed) */}
+            {isGameOver && !showGameOverModal && (
+                <motion.div 
+                    initial={{ y: 100 }}
+                    animate={{ y: 0 }}
+                    className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/90 border-t border-red-500/50 p-4 backdrop-blur-md"
+                >
+                    <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
+                        <div className="flex items-center gap-2">
+                             <span className="text-red-500 font-bold text-xl">GAME OVER</span>
+                             <button 
+                                onClick={() => setShowGameOverModal(true)}
+                                className="text-sm text-slate-400 hover:text-white underline ml-2"
+                             >
+                                Show Menu
+                             </button>
+                        </div>
+
+                        <div className="flex gap-2">
+                            {setupMode && (
+                                <button 
+                                    onClick={restartGame}
+                                    className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg shadow-lg hover:shadow-red-500/50 transition-all"
+                                >
+                                    RETRY
+                                </button>
+                            )}
+                            <button 
+                                onClick={leaveRoom}
+                                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors"
+                            >
+                                MENU
+                            </button>
+                        </div>
+                    </div>
                 </motion.div>
             )}
        </AnimatePresence>

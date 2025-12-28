@@ -8,6 +8,10 @@ class MinesweeperGame {
     this.difficulty = difficulty;
     this.grid = []; // Initialement vide
     this.isGenerated = false;
+    
+    // Scanner Logic
+    // Easy/Medium: 2 scans. Hard/Hardcore: 1 scan.
+    this.scansAvailable = (difficulty === 'easy' || difficulty === 'medium') ? 2 : 1;
   }
 
   // Initialise une grille vide
@@ -18,11 +22,34 @@ class MinesweeperGame {
         isMine: false,
         isOpen: false,
         flag: 0, // 0: none, 1: flag, 2: question 
+        scanned: null, // null | 'mine' | 'safe'
         neighborCount: 0,
         lyingNumbers: null // Pour la difficulté "hardcore"
       }))
     );
   }
+
+
+
+  scanCell(x, y) {
+      if (!this.isValid(x, y)) return null;
+      if (this.scansAvailable <= 0) return null;
+      
+      const cell = this.grid[y][x];
+      
+      // Cannot scan if already open or already scanned
+      if (cell.isOpen || cell.scanned) return null;
+
+      // Perform scan
+      cell.scanned = cell.isMine ? 'mine' : 'safe';
+      this.scansAvailable--;
+
+      return { 
+          cell, 
+          scansAvailable: this.scansAvailable 
+      };
+  }
+
 
   // Vérifie si le joueur a gagné (toutes les cases non-minées sont ouvertes)
   checkWin() {
@@ -39,6 +66,9 @@ class MinesweeperGame {
 
   // Prépare le niveau suivant en gardant la dernière ligne comme première
   initializeNextLevel(previousLastRow) {
+      // Reset Scanner for new level (Always 1 for infinite mode levels as per request)
+      this.scansAvailable = 1;
+
       // 1. Reset grid but keep size
       this.grid = Array(this.rows).fill().map((_, y) => 
         Array(this.cols).fill().map((_, x) => ({
@@ -46,6 +76,7 @@ class MinesweeperGame {
           isMine: false,
           isOpen: false,
           flag: 0, 
+          scanned: null,
           neighborCount: 0,
           quantumRange: null,
           lyingNumbers: null
