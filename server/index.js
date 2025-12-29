@@ -4,13 +4,15 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const MinesweeperGame = require('./gameLogic');
-const { generateNextRow } = require('./infiniteLogic');
+const { db } = require('./db');
+const { users } = require('./db/schema');
+const { eq, lt } = require('drizzle-orm');
 
 const app = express();
 app.use(cors());
 
 app.get('/', (req, res) => {
-  console.log('Server is alive timer');
+
   
   res.send('Server is alive');
 });
@@ -25,15 +27,63 @@ const io = new Server(server, {
 
 const games = {}; // stocke les instances de jeu par roomId
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+// Cleanup function for old games (older than 30 days)
+async function cleanupOldGames() {
+    try {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        await db.update(users)
+            .set({ currentRoomId: null })
+            .where(lt(users.lastActive, thirtyDaysAgo));
+            
 
-  socket.on('create_room', ({ mode, difficulty, hp }) => {
+    } catch (error) {
+        console.error('Error cleaning up old games:', error);
+    }
+}
+
+// Run cleanup on start and every 24 hours
+cleanupOldGames();
+setInterval(cleanupOldGames, 24 * 60 * 60 * 1000);
+
+io.on('connection', (socket) => {
+
+
+  socket.on('check_recovery', async (pseudo) => {
+      if (!pseudo) return;
+      try {
+          // Normalize pseudo
+          const normalizedPseudo = pseudo.toLowerCase();
+
+          
+          const user = await db.select().from(users).where(eq(users.pseudo, normalizedPseudo)).limit(1);
+
+          
+          if (user.length > 0 && user[0].currentRoomId) {
+              const roomId = user[0].currentRoomId;
+              
+              if (games[roomId]) {
+                  socket.emit('recovery_available', { 
+                      roomId, 
+                      mode: games[roomId].mode, 
+                      difficulty: games[roomId].difficulty 
+                  });
+              } else {
+              }
+          } else {
+          }
+      } catch (error) {
+          console.error('Error checking recovery:', error);
+      }
+  });
+
+  socket.on('create_room', async ({ mode, difficulty, hp, pseudo }) => {
       const roomId = uuidv4().substring(0, 6).toUpperCase();
       
       // Presets de difficulté updated for higher density
       let rows = 16, cols = 16, mines = 40;
-      if (difficulty === 'easy') { rows = 9; cols = 9; mines = 12; } // Was 10
+      if (difficulty === 'easy') { rows = 10; cols = 10; mines = 15; } // Was 10
       if (difficulty === 'medium') { rows = 16; cols = 16; mines = 50; } // Was 40
       if (difficulty === 'hard') { rows = 16; cols = 30; mines = 110; } // Was 99
       if (difficulty === 'hardcore') { rows = 20; cols = 35; mines = 150; } // New Hardcore
@@ -42,6 +92,23 @@ io.on('connection', (socket) => {
       games[roomId] = new MinesweeperGame(rows, cols, mines, mode || 'classic', hp || 3, difficulty);
       games[roomId].initializeEmptyGrid();
       
+      // Save User to DB
+      if (pseudo) {
+          try {
+              const normalizedPseudo = pseudo.toLowerCase();
+              await db.insert(users).values({
+                  pseudo: normalizedPseudo,
+                  currentRoomId: roomId,
+                  lastActive: new Date()
+              }).onConflictDoUpdate({
+                  target: users.pseudo,
+                  set: { currentRoomId: roomId, lastActive: new Date() }
+              });
+          } catch(e) {
+              console.error("DB Error:", e);
+          }
+      }
+
       socket.join(roomId);
       socket.emit('room_created', roomId);
       
@@ -57,10 +124,27 @@ io.on('connection', (socket) => {
       });
   });
   
-  socket.on('join_room', (roomId) => {
+  socket.on('join_room', async (roomId, pseudo) => { // pseudo param optional
     if (games[roomId]) {
         socket.join(roomId);
         
+        // Save User logic (update room ID for this user)
+        if (pseudo) {
+             try {
+                const normalizedPseudo = pseudo.toLowerCase();
+                await db.insert(users).values({
+                    pseudo: normalizedPseudo,
+                    currentRoomId: roomId,
+                    lastActive: new Date()
+                }).onConflictDoUpdate({
+                    target: users.pseudo,
+                    set: { currentRoomId: roomId, lastActive: new Date() }
+                });
+            } catch(e) {
+                console.error("DB Error:", e);
+            }
+        }
+
         // Determine player role based on room size (simple heuristic)
         const room = io.sockets.adapter.rooms.get(roomId);
         const playerCount = room ? room.size : 0;
@@ -74,15 +158,25 @@ io.on('connection', (socket) => {
             cols: games[roomId].cols,
             mines: games[roomId].minesCount, 
             scansAvailable: games[roomId].scansAvailable, // Scanner count
-            role: 'P2' 
+            role: role // Use calculated role
         });
     } else {
         socket.emit('error', 'Room not found');
     }
   });
 
-  socket.on('leave_room', (roomId) => {
+  socket.on('leave_room', async (roomId, pseudo) => {
       socket.leave(roomId);
+      if (pseudo) {
+          try {
+              const normalizedPseudo = pseudo.toLowerCase();
+              await db.update(users)
+                  .set({ currentRoomId: null })
+                  .where(eq(users.pseudo, normalizedPseudo));
+          } catch(e) {
+              console.error("DB Error clearing room:", e);
+          }
+      }
   });
 
   socket.on('cursor_move', ({ x, y, roomId, role }) => {
@@ -201,7 +295,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+
   });
 });
 

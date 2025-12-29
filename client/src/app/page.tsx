@@ -1,11 +1,13 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { socket } from '@/utils/socket';
 import { GridData, CellData, GameInitData } from '@/utils/types';
 import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar } from 'lucide-react';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Gamepad2 } from 'lucide-react';
 
 export default function Home() {
   const [inRoom, setInRoom] = useState(false);
@@ -30,6 +32,12 @@ export default function Home() {
   const [scansAvailable, setScansAvailable] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
 
+  // Recovery State
+  // Recovery State
+  const [pseudo, setPseudo] = useState('');
+  const [storedPseudo, setStoredPseudo] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(true);
+
   const handleCopyRoomId = () => {
       navigator.clipboard.writeText(roomId);
       setCopied(true);
@@ -39,6 +47,22 @@ export default function Home() {
   // Calculate flags
   const flagsCount = grid.flat().filter(cell => cell.flag === 1).length;
   const remainingMines = minesCount - flagsCount;
+
+  const leaveRoom = () => {
+      setInRoom(false);
+      setRoomId('');
+      setGrid([]);
+      setHp(3);
+      setIsGameOver(false);
+      setScore(0);
+      sessionStorage.removeItem('minigame_roomId'); // Clear only on explicit leave
+      socket.emit('leave_room', roomId, pseudo);
+  };
+  
+  const joinRoom = (id: string) => {
+    setRoomId(id);
+    socket.emit('join_room', id, pseudo);
+  };
 
   useEffect(() => {
     socket.connect();
@@ -129,6 +153,44 @@ export default function Home() {
     socket.on('level_complete', onLevelComplete);
     socket.on('explosion', onExplosion);
     socket.on('game_over', onGameOver);
+    socket.on('recovery_available', ({ roomId, mode, difficulty }: { roomId: string, mode: string, difficulty: string }) => {
+        toast.custom((t) => (
+            <div className="w-full flex flex-col gap-3 bg-slate-900/95 border border-blue-500/30 p-4 rounded-xl shadow-2xl shadow-blue-500/10 backdrop-blur-md relative overflow-hidden">
+                {/* Glow effect */}
+                <div className="absolute top-0 left-0 w-1 h-full bg-linear-to-b from-blue-500 to-purple-500" />
+                
+                <div className="flex items-start gap-3 pl-2">
+                    <div className="p-2 bg-blue-500/10 rounded-lg shrink-0 mt-0.5">
+                        <Gamepad2 className="w-5 h-5 text-blue-400 animate-pulse" />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="font-bold text-white text-sm tracking-wide">SESSION FOUND</h3>
+                        <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                            Resuming <span className={`font-extrabold uppercase ${mode === 'hardcore' ? 'text-pink-300' : 'text-blue-400'}`}>
+                                {mode === 'hardcore' ? 'INFINITE' : 'CLASSIC'}
+                            </span> game on <span className="font-bold text-yellow-500 uppercase">{difficulty}</span> difficulty.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex gap-2 w-full pl-2 mt-1">
+                    <button 
+                        onClick={() => toast.dismiss(t)} 
+                        className="flex-1 py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                        DISMISS
+                    </button>
+                    <button 
+                        onClick={() => { joinRoom(roomId); toast.dismiss(t); }} 
+                        className="flex-1 py-2 text-xs font-bold text-white bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-lg shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                    >
+                        RESUME GAME
+                    </button>
+                </div>
+            </div>
+        ), { duration: Infinity });
+    });
+
 
     return () => {
       socket.off('room_created', onRoomCreated);
@@ -139,27 +201,23 @@ export default function Home() {
       socket.off('level_complete', onLevelComplete);
       socket.off('explosion', onExplosion);
       socket.off('game_over', onGameOver);
+      socket.off('recovery_available');
       socket.disconnect();
     };
   }, []);
 
-  const leaveRoom = () => {
-      setInRoom(false);
-      setRoomId('');
-      setGrid([]);
-      setHp(3);
-      setIsGameOver(false);
-      setScore(0);
-      socket.emit('leave_room', roomId);
-  };
-  
-  const joinRoom = (id: string) => {
-    socket.emit('join_room', id);
-  };
+
+
+  // Keep Session Storage in sync (Only Set, never Clear automatically)
+  useEffect(() => {
+      if (inRoom && roomId) {
+          sessionStorage.setItem('minigame_roomId', roomId);
+      }
+  }, [inRoom, roomId]);
 
   const startGame = () => {
       if (!setupMode) return;
-      socket.emit('create_room', { mode: setupMode, difficulty, hp: customHp });
+      socket.emit('create_room', { mode: setupMode, difficulty, hp: customHp, pseudo });
   };
 
   const restartGame = () => {
@@ -169,16 +227,124 @@ export default function Home() {
       setShowGameOverModal(false); 
   };
 
+  // Restore Pseudo State (Run once on mount)
+  // Restore Pseudo State (Run once on mount)
+  useEffect(() => {
+      const sPseudo = sessionStorage.getItem('minigame_pseudo');
+      const sRoomId = sessionStorage.getItem('minigame_roomId');
+
+      if (sPseudo) {
+          setPseudo(sPseudo);
+          setStoredPseudo(sPseudo);
+          setIsEditing(false);
+
+          // Check for recovery if no local room but pseudo exists
+          if (!sRoomId) {
+             if (socket.connected) {
+                 socket.emit('check_recovery', sPseudo);
+             } else {
+                 socket.once('connect', () => {
+                     socket.emit('check_recovery', sPseudo);
+                 });
+             }
+          }
+      }
+  }, []);
+
+  // Auto-Join Effect
+  useEffect(() => {
+      const sPseudo = sessionStorage.getItem('minigame_pseudo');
+      const sRoomId = sessionStorage.getItem('minigame_roomId');
+      
+
+      
+      if (sRoomId && !inRoom && socket.connected) {
+
+           setRoomId((prev) => (prev !== sRoomId ? sRoomId : prev)); 
+           socket.emit('join_room', sRoomId, sPseudo || ""); // Pseudo optional
+      } else if (sRoomId && !inRoom) {
+          socket.once('connect', () => {
+              setRoomId(sRoomId); 
+              socket.emit('join_room', sRoomId, sPseudo || "");
+          });
+      }
+  }, [inRoom]);
+
+  const handleLogin = () => {
+      // 1. MODIFY STATE: User wants to edit
+      if (!isEditing) {
+          setIsEditing(true);
+          return;
+      }
+
+      // 2. CANCEL STATE: User cancels editing (revert to stored)
+      if (storedPseudo && pseudo === storedPseudo) {
+          setIsEditing(false);
+          return;
+      }
+      
+      // 3. LOGIN STATE: User submits new pseudo
+      if(pseudo.length > 0) {
+          sessionStorage.setItem('minigame_pseudo', pseudo);
+          setStoredPseudo(pseudo);
+          setIsEditing(false);
+          socket.emit('check_recovery', pseudo);
+      }
+  };
+
+  const getButtonState = () => {
+      if (!isEditing) return 'MODIFY';
+      if (storedPseudo && pseudo === storedPseudo) return 'CANCEL';
+      return 'LOGIN';
+  };
+
+
+
   if (!inRoom) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-6 md:p-24 relative overflow-hidden">
         {/* Ambient Background */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-blue-900/20 via-black to-black z-0 pointer-events-none" />
         
+        {/* Recovery Toast */}
+
+
         <div className="z-10 flex flex-col items-center gap-8 w-full max-w-lg">
             <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent tracking-tighter text-center mb-4 drop-shadow-lg">
                 DEMINEURS V2
             </h1>
+            
+            <div className="w-full flex flex-col gap-2">
+                <label className="text-slate-400 text-xs font-bold uppercase tracking-wider ml-1">IDENTIFICATION</label>
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        placeholder="Enter your Pseudo" 
+                        value={pseudo}
+                        onChange={(e) => setPseudo(e.target.value)}
+                        readOnly={!isEditing}
+                        onKeyDown={(e) => e.key === 'Enter' && pseudo.length > 0 && handleLogin()}
+                        className={`flex-1 px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none transition-all placeholder:text-slate-600 ${
+                            isEditing 
+                            ? 'focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
+                            : 'opacity-50 cursor-not-allowed bg-slate-950 text-slate-400'
+                        }`}
+                    />
+                    <button 
+                        onClick={handleLogin}
+                        disabled={isEditing && pseudo.length === 0}
+                        className={`px-6 py-3 rounded-xl font-bold text-white transition-all shadow-lg min-w-[100px] ${
+                            getButtonState() === 'MODIFY' ? 'bg-slate-700 hover:bg-slate-600' :
+                            getButtonState() === 'CANCEL' ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20' :
+                            pseudo.length > 0 
+                                ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20' 
+                                : 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none'
+                        }`}
+                    >
+                        {getButtonState()}
+                    </button>
+                </div>
+            </div>
             
             {!setupMode ? (
                 // MODE SELECTION

@@ -10,7 +10,9 @@ class MinesweeperGame {
     this.isGenerated = false;
     
     // Scanner Logic
-    this.scansAvailable = (difficulty === 'easy' || difficulty === 'medium') ? 2 : 1;
+    if (difficulty === 'easy') this.scansAvailable = 1;
+    else if (difficulty === 'medium') this.scansAvailable = 2;
+    else this.scansAvailable = 3;
   }
 
   // Initialise une grille vide
@@ -62,7 +64,9 @@ class MinesweeperGame {
 
   // Prépare le niveau suivant
   initializeNextLevel(previousLastRow) {
-      this.scansAvailable = 1;
+      if (this.difficulty === 'easy') this.scansAvailable = 1;
+      else if (this.difficulty === 'medium') this.scansAvailable = 2;
+      else this.scansAvailable = 3;
 
       // 1. Reset grid but keep size
       this.grid = Array(this.rows).fill().map((_, y) => 
@@ -81,8 +85,15 @@ class MinesweeperGame {
       for(let x = 0; x < this.cols; x++) {
           const prevCell = previousLastRow[x];
           this.grid[0][x].isMine = prevCell.isMine;
-          this.grid[0][x].isOpen = prevCell.isOpen; 
-          this.grid[0][x].flag = prevCell.flag;
+          
+          if (prevCell.isMine) {
+              this.grid[0][x].isOpen = true;
+              this.grid[0][x].flag = 0; // Remove flag to show the bomb icon
+          } else {
+              this.grid[0][x].isOpen = prevCell.isOpen; 
+              this.grid[0][x].flag = prevCell.flag;
+          }
+
           this.grid[0][x].targetNumber = prevCell.neighborCount;
           this.grid[0][x].neighborCount = prevCell.neighborCount; 
       }
@@ -90,18 +101,28 @@ class MinesweeperGame {
       this.isGenerated = false; 
       
       // 3. Generate the "Seam" (Row 1)
-      this.generateSeam();
+      const seamForbidden = this.generateSeam();
       
-      // 4. Generate the rest of the board (Row 2+)
-      this.generateMines(0, 0, 2); 
+      // 4. Generate the rest of the board (Row 1+, respecting seam constraints)
+      this.generateMines(0, 0, 1, seamForbidden); 
   }
 
   generateSeam() {
+      const constrained = new Set();
+
       for (let x = 0; x < this.cols; x++) {
           const cell0 = this.grid[0][x];
           
           if (cell0.isMine) continue;
           if (!cell0.targetNumber) continue;
+
+          // If targetNumber > 0, we MUST constrain all Row 1 neighbors to satisfy the exact count
+          [{dx: -1, dy: 1}, {dx: 0, dy: 1}, {dx: 1, dy: 1}].forEach(({dx, dy}) => {
+              const nx = x + dx;
+              if (this.isValid(nx, dy)) {
+                  constrained.add(`${nx},${dy}`);
+              }
+          });
 
           let currentCount = 0;
           const neighbors = [
@@ -138,6 +159,7 @@ class MinesweeperGame {
               }
           } 
       }
+      return constrained;
   }
 
   // --- NOUVELLE FONCTION CLÉ ---
@@ -201,7 +223,7 @@ class MinesweeperGame {
   }
 
   // Génère les mines APRÈS le premier clic
-  generateMines(safeX, safeY, startRowOverride = null) {
+  generateMines(safeX, safeY, startRowOverride = null, extraForbidden = null) {
     let minesPlaced = 0;
     
     for(let y=0; y<this.rows; y++) {
@@ -226,11 +248,16 @@ class MinesweeperGame {
     let forbiddenSet;
     if (startRowOverride !== null) {
         forbiddenSet = new Set();
-        for(let dy=-1; dy<=1; dy++) {
-            for(let dx=-1; dx<=1; dx++) {
-                forbiddenSet.add(`${safeX+dx},${safeY+dy}`);
-            }
+        // If we have extraForbidden constraints (Seam constraints), use them
+        if (extraForbidden) {
+             extraForbidden.forEach(k => forbiddenSet.add(k));
         }
+        // Minimal safety for Infinite Mode if no extra constraints provided? 
+        // Actually, if startRowOverride is used, usually we rely on that. 
+        // The original code added a 3x3 safety zone here around SAFE_X/SAFE_Y. 
+        // But in Infinite Mode scroll, SAFE_X/SAFE_Y are meaningless (usually 0,0).
+        // So we strictly trust extraForbidden if present, or create minimal if empty?
+        // Let's keep the user's implicit logic: if extraForbidden is provided, it's the constraint.
     } else {
         forbiddenSet = this.generateOrganicSafeZone(safeX, safeY);
     }
@@ -238,7 +265,8 @@ class MinesweeperGame {
     while (minesPlaced < this.minesCount) {
       const x = Math.floor(Math.random() * this.cols);
       const y = Math.floor(Math.random() * (this.rows - startRow)) + startRow; 
-
+      
+      // ... logic continues ...
       const key = `${x},${y}`;
 
       // Vérifie si la case est interdite (dans notre forme complexe)
