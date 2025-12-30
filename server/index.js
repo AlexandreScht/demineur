@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const MinesweeperGame = require('./gameLogic');
 const { db } = require('./db');
 const { users } = require('./db/schema');
-const { eq, lt } = require('drizzle-orm');
+const { eq, lt, and, isNotNull } = require('drizzle-orm');
 
 const app = express();
 app.use(cors());
@@ -33,6 +33,29 @@ async function cleanupOldGames() {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         
+        // 1. Recover inactive users with a room
+        const inactiveUsers = await db.select()
+            .from(users)
+            .where(
+                and(
+                    lt(users.lastActive, thirtyDaysAgo),
+                    isNotNull(users.currentRoomId)
+                )
+            );
+
+        // 2. Cleanup memory
+        if (inactiveUsers.length > 0) {
+            console.log(`Cleaning up ${inactiveUsers.length} inactive games...`);
+            inactiveUsers.forEach(user => {
+                const roomId = user.currentRoomId;
+                if (roomId && games[roomId]) {
+                    delete games[roomId];
+                    console.log(`Deleted game ${roomId} from memory (User: ${user.pseudo})`);
+                }
+            });
+        }
+        
+        // 3. Update DB
         await db.update(users)
             .set({ currentRoomId: null })
             .where(lt(users.lastActive, thirtyDaysAgo));
