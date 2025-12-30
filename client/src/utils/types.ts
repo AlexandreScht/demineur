@@ -21,4 +21,5 @@ export interface GameInitData {
     role?: 'P1' | 'P2';
     mode?: string;
     difficulty?: string;
+    level?: number;
 }

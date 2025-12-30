@@ -126,6 +126,7 @@ io.on('connection', (socket) => {
       // Création d'une nouvelle partie with difficulty passed to constructor
       games[roomId] = new MinesweeperGame(dRows, dCols, dMines, mode || 'classic', hp || 3, difficulty, dScans, dAllowLying, dLyingChance);
       games[roomId].initializeEmptyGrid();
+      games[roomId].level = 1; // Initialize Level
       
       // Save User to DB
       if (pseudo) {
@@ -157,8 +158,10 @@ io.on('connection', (socket) => {
             scansAvailable: games[roomId].scansAvailable, // Scanner count
             role: 'P1',
             mode: games[roomId].mode,
-            difficulty: games[roomId].difficulty
+            difficulty: games[roomId].difficulty,
+            level: games[roomId].level
       });
+
   });
   
   socket.on('join_room', async (roomId, pseudo) => { // pseudo param optional
@@ -197,8 +200,10 @@ io.on('connection', (socket) => {
             scansAvailable: games[roomId].scansAvailable, // Scanner count
             role: role, // Use calculated role
             mode: games[roomId].mode,
-            difficulty: games[roomId].difficulty
+            difficulty: games[roomId].difficulty,
+            level: games[roomId].level
         });
+
     } else {
         socket.emit('error', 'Room not found');
     }
@@ -292,6 +297,8 @@ io.on('connection', (socket) => {
                // Infinite Mode Logic
                if (!games[roomId].score) games[roomId].score = 0;
                games[roomId].score += 1;
+               if (!games[roomId].level) games[roomId].level = 1;
+               games[roomId].level += 1;
                
                // Prepare next level
                const lastRow = game.grid[game.rows - 1];
@@ -299,6 +306,7 @@ io.on('connection', (socket) => {
                io.to(roomId).emit('level_complete', { 
                    grid: game.grid, 
                    score: games[roomId].score,
+                   level: games[roomId].level,
                    mines: game.minesCount,
                    scansAvailable: game.scansAvailable // Reset to 1
                });
@@ -339,6 +347,7 @@ io.on('connection', (socket) => {
 
     games[roomId] = new MinesweeperGame(dRows, dCols, dMines, safeMode, safeHp, safeDiff, dScans, dAllowLying, dLyingChance);
     games[roomId].initializeEmptyGrid();
+    games[roomId].level = 1;
 
     io.to(roomId).emit('init_game', {
         grid: games[roomId].grid, 
@@ -349,7 +358,8 @@ io.on('connection', (socket) => {
         mines: games[roomId].minesCount,
         scansAvailable: games[roomId].scansAvailable,
         mode: games[roomId].mode,
-        difficulty: games[roomId].difficulty
+        difficulty: games[roomId].difficulty,
+        level: games[roomId].level
     });
   });
 

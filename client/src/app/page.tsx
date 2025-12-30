@@ -119,7 +119,7 @@ export default function Home() {
         if (data.role) setMyRole(data.role);
         if (data.mode) setSetupMode(data.mode as any);
         if (data.difficulty) setDifficulty(data.difficulty as any);
-        setScore(0);
+        setScore(data.level ? data.level - 1 : 0);
     };
 
     function onUpdateGrid(changes: CellData[]) {
@@ -132,7 +132,7 @@ export default function Home() {
         });
     }
     
-    function onLevelComplete({ grid: newGrid, score: newScore, mines, scansAvailable }: { grid: GridData, score: number, mines: number, scansAvailable?: number }) {
+    function onLevelComplete({ grid: newGrid, score: newScore, level: newLevel, mines, scansAvailable }: { grid: GridData, score: number, level?: number, mines: number, scansAvailable?: number }) {
         setGrid(currentGrid => {
             // Construct merged grid for animation: Current + New (skipping first overlapped row)
             const merged = [...currentGrid, ...newGrid.slice(1)];
@@ -147,7 +147,7 @@ export default function Home() {
             return newGrid; 
         });
         
-        setScore(newScore);
+        setScore(newLevel ? newLevel - 1 : newScore);
         setMinesCount(mines);
         if (scansAvailable !== undefined) setScansAvailable(scansAvailable);
         setIsScanning(false);
