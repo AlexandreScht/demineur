@@ -120,7 +120,9 @@ io.on('connection', (socket) => {
             cols: games[roomId].cols,
             mines: games[roomId].minesCount, 
             scansAvailable: games[roomId].scansAvailable, // Scanner count
-            role: 'P1'
+            role: 'P1',
+            mode: games[roomId].mode,
+            difficulty: games[roomId].difficulty
       });
   });
   
@@ -158,7 +160,9 @@ io.on('connection', (socket) => {
             cols: games[roomId].cols,
             mines: games[roomId].minesCount, 
             scansAvailable: games[roomId].scansAvailable, // Scanner count
-            role: role // Use calculated role
+            role: role, // Use calculated role
+            mode: games[roomId].mode,
+            difficulty: games[roomId].difficulty
         });
     } else {
         socket.emit('error', 'Room not found');
@@ -274,13 +278,19 @@ io.on('connection', (socket) => {
   socket.on('restart_game', ({ roomId, mode, difficulty, hp }) => {
     if (!games[roomId]) return;
 
-    let rows = 16, cols = 16, mines = 40;
-    if (difficulty === 'easy') { rows = 9; cols = 9; mines = 12; }
-    if (difficulty === 'medium') { rows = 16; cols = 16; mines = 50; }
-    if (difficulty === 'hard') { rows = 16; cols = 30; mines = 110; }
-    if (difficulty === 'hardcore') { rows = 20; cols = 35; mines = 150; }
+    const oldGame = games[roomId];
+    // Use provided params OR fallback to existing game settings
+    const safeMode = mode || oldGame.mode || 'classic';
+    const safeDiff = difficulty || oldGame.difficulty || 'medium';
+    const safeHp = hp || oldGame.hp || 3;
 
-    games[roomId] = new MinesweeperGame(rows, cols, mines, mode || 'classic', hp || 3, difficulty);
+    let rows = 16, cols = 16, mines = 40;
+    if (safeDiff === 'easy') { rows = 9; cols = 9; mines = 12; }
+    if (safeDiff === 'medium') { rows = 16; cols = 16; mines = 50; }
+    if (safeDiff === 'hard') { rows = 16; cols = 30; mines = 110; }
+    if (safeDiff === 'hardcore') { rows = 20; cols = 35; mines = 150; }
+
+    games[roomId] = new MinesweeperGame(rows, cols, mines, safeMode, safeHp, safeDiff);
     games[roomId].initializeEmptyGrid();
 
     io.to(roomId).emit('init_game', {
@@ -290,7 +300,9 @@ io.on('connection', (socket) => {
         rows: games[roomId].rows,
         cols: games[roomId].cols,
         mines: games[roomId].minesCount,
-        scansAvailable: games[roomId].scansAvailable
+        scansAvailable: games[roomId].scansAvailable,
+        mode: games[roomId].mode,
+        difficulty: games[roomId].difficulty
     });
   });
 

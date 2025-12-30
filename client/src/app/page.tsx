@@ -87,6 +87,8 @@ export default function Home() {
         setScansAvailable(data.scansAvailable || 0);
         setIsScanning(false); 
         if (data.role) setMyRole(data.role);
+        if (data.mode) setSetupMode(data.mode as any);
+        if (data.difficulty) setDifficulty(data.difficulty as any);
         setScore(0);
     };
 
@@ -566,14 +568,12 @@ export default function Home() {
                         <p className="text-slate-400 mb-8 text-lg">You Failed ! (looser)</p>
                         
                         <div className="flex flex-col gap-3">
-                            {setupMode && (
                                 <button 
                                     onClick={restartGame}
                                     className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-black text-xl transition-all rounded-lg shadow-lg hover:shadow-red-500/50"
                                 >
                                     RETRY
                                 </button>
-                            )}
                             <button 
                                 onClick={() => setShowGameOverModal(false)}
                                 className="w-full py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xl transition-colors rounded-lg"

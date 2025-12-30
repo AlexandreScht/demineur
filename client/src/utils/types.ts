@@ -19,4 +19,6 @@ export interface GameInitData {
     mines: number;
     scansAvailable?: number;
     role?: 'P1' | 'P2';
+    mode?: string;
+    difficulty?: string;
 }
