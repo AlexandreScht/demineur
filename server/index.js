@@ -101,18 +101,30 @@ io.on('connection', (socket) => {
       }
   });
 
-  socket.on('create_room', async ({ mode, difficulty, hp, pseudo }) => {
+  socket.on('create_room', async ({ mode, difficulty, hp, pseudo, rows, cols, mines, scansAvailable, allowLying, lyingChance }) => {
       const roomId = uuidv4().substring(0, 6).toUpperCase();
       
       // Presets de difficulté updated for higher density
-      let rows = 16, cols = 16, mines = 40;
-      if (difficulty === 'easy') { rows = 10; cols = 10; mines = 15; } // Was 10
-      if (difficulty === 'medium') { rows = 16; cols = 16; mines = 50; } // Was 40
-      if (difficulty === 'hard') { rows = 16; cols = 30; mines = 110; } // Was 99
-      if (difficulty === 'hardcore') { rows = 20; cols = 35; mines = 150; } // New Hardcore
+      let dRows = 16, dCols = 16, dMines = 50;
+      let dScans = 0;
+      let dAllowLying = false;
+      let dLyingChance = 12.5;
+
+      if (difficulty === 'custom') {
+          dRows = rows || 16;
+          dCols = cols || 16;
+          dMines = mines || 50;
+          dScans = scansAvailable || 0;
+          dAllowLying = !!allowLying;
+          dLyingChance = lyingChance || 12.5;
+      }
+      if (difficulty === 'easy') { dRows = 10; dCols = 10; dMines = 15; } // Was 10
+      if (difficulty === 'medium') { dRows = 16; dCols = 16; dMines = 50; } // Was 40
+      if (difficulty === 'hard') { dRows = 16; dCols = 30; dMines = 110; } // Was 99
+      if (difficulty === 'hardcore') { dRows = 20; dCols = 35; dMines = 150; } // New Hardcore
 
       // Création d'une nouvelle partie with difficulty passed to constructor
-      games[roomId] = new MinesweeperGame(rows, cols, mines, mode || 'classic', hp || 3, difficulty);
+      games[roomId] = new MinesweeperGame(dRows, dCols, dMines, mode || 'classic', hp || 3, difficulty, dScans, dAllowLying, dLyingChance);
       games[roomId].initializeEmptyGrid();
       
       // Save User to DB
@@ -298,7 +310,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('restart_game', ({ roomId, mode, difficulty, hp }) => {
+  socket.on('restart_game', ({ roomId, mode, difficulty, hp, rows, cols, mines, scansAvailable, allowLying, lyingChance }) => {
     if (!games[roomId]) return;
 
     const oldGame = games[roomId];
@@ -307,13 +319,25 @@ io.on('connection', (socket) => {
     const safeDiff = difficulty || oldGame.difficulty || 'medium';
     const safeHp = hp || oldGame.hp || 3;
 
-    let rows = 16, cols = 16, mines = 40;
-    if (safeDiff === 'easy') { rows = 9; cols = 9; mines = 12; }
-    if (safeDiff === 'medium') { rows = 16; cols = 16; mines = 50; }
-    if (safeDiff === 'hard') { rows = 16; cols = 30; mines = 110; }
-    if (safeDiff === 'hardcore') { rows = 20; cols = 35; mines = 150; }
+    let dRows = 16, dCols = 16, dMines = 40;
+    let dScans = 0;
+    let dAllowLying = false;
+    let dLyingChance = 12.5;
 
-    games[roomId] = new MinesweeperGame(rows, cols, mines, safeMode, safeHp, safeDiff);
+    if (safeDiff === 'custom') {
+        dRows = rows || oldGame.rows;
+        dCols = cols || oldGame.cols;
+        dMines = mines || oldGame.initialMinesCount || oldGame.minesCount;
+        dScans = scansAvailable !== undefined ? scansAvailable : (oldGame.customScans || 0);
+        dAllowLying = allowLying !== undefined ? allowLying : (oldGame.allowLying || false);
+        dLyingChance = lyingChance !== undefined ? lyingChance : (oldGame.lyingChance || 12.5);
+    }
+    if (safeDiff === 'easy') { dRows = 9; dCols = 9; dMines = 12; }
+    if (safeDiff === 'medium') { dRows = 16; dCols = 16; dMines = 50; }
+    if (safeDiff === 'hard') { dRows = 16; dCols = 30; dMines = 110; }
+    if (safeDiff === 'hardcore') { dRows = 20; dCols = 35; dMines = 150; }
+
+    games[roomId] = new MinesweeperGame(dRows, dCols, dMines, safeMode, safeHp, safeDiff, dScans, dAllowLying, dLyingChance);
     games[roomId].initializeEmptyGrid();
 
     io.to(roomId).emit('init_game', {

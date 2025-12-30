@@ -1,16 +1,21 @@
 class MinesweeperGame {
-  constructor(rows, cols, minesCount, mode = 'classic', hp = 3, difficulty = 'medium') {
+  constructor(rows, cols, minesCount, mode = 'classic', hp = 3, difficulty = 'medium', customScans = 0, allowLying = false, lyingChance = 12.5) {
     this.rows = rows;
     this.cols = cols;
     this.minesCount = minesCount;
+    this.initialMinesCount = minesCount;
     this.mode = mode; // 'classic' ou 'hardcore'
     this.hp = hp; 
     this.difficulty = difficulty;
+    this.customScans = customScans;
+    this.allowLying = allowLying;
+    this.lyingChance = lyingChance;
     this.grid = []; // Initialement vide
     this.isGenerated = false;
     
     // Scanner Logic
-    if (difficulty === 'easy') this.scansAvailable = 1;
+    if (difficulty === 'custom') this.scansAvailable = customScans;
+    else if (difficulty === 'easy') this.scansAvailable = 1;
     else if (difficulty === 'medium') this.scansAvailable = 2;
     else this.scansAvailable = 3;
   }
@@ -64,10 +69,11 @@ class MinesweeperGame {
 
   // Prépare le niveau suivant
   initializeNextLevel(previousLastRow) {
-      if (this.difficulty === 'easy') this.scansAvailable = 1;
+      if (this.difficulty === 'custom') this.scansAvailable = this.customScans;
+      else if (this.difficulty === 'easy') this.scansAvailable = 1;
       else if (this.difficulty === 'medium') this.scansAvailable = 2;
-      else this.scansAvailable = 3;
-
+      // Reset Mines Count - Will be calculated based on Initial + Row 0
+      
       // 1. Reset grid but keep size
       this.grid = Array(this.rows).fill().map((_, y) => 
         Array(this.cols).fill().map((_, x) => ({
@@ -82,6 +88,7 @@ class MinesweeperGame {
       );
 
       // 2. Import previous row as TOP row (y=0)
+      let minesInRow0 = 0;
       for(let x = 0; x < this.cols; x++) {
           const prevCell = previousLastRow[x];
           this.grid[0][x].isMine = prevCell.isMine;
@@ -89,6 +96,7 @@ class MinesweeperGame {
           if (prevCell.isMine) {
               this.grid[0][x].isOpen = true;
               this.grid[0][x].flag = 0; // Remove flag to show the bomb icon
+              minesInRow0++;
           } else {
               this.grid[0][x].isOpen = prevCell.isOpen; 
               this.grid[0][x].flag = prevCell.flag;
@@ -97,6 +105,9 @@ class MinesweeperGame {
           this.grid[0][x].targetNumber = prevCell.neighborCount;
           this.grid[0][x].neighborCount = prevCell.neighborCount; 
       }
+      
+      // Update Target Count: Initial Budget + Carried Over Mines from Row 0
+      this.minesCount = this.initialMinesCount + minesInRow0;
 
       this.isGenerated = false; 
       
@@ -155,7 +166,7 @@ class MinesweeperGame {
 
               for (let i = 0; i < deficit && i < candidates.length; i++) {
                   candidates[i].isMine = true;
-                  this.minesCount++; 
+                  // Mine count is NOT incremented here; these mines consume the generation budget.
               }
           } 
       }
@@ -283,7 +294,7 @@ class MinesweeperGame {
 
     this.calculateNumbers();
     
-    if (this.difficulty === 'hardcore') {
+    if (this.difficulty === 'hardcore' || (this.difficulty === 'custom' && this.allowLying)) {
         this.applyLyingNumbers();
     }
     
@@ -355,12 +366,15 @@ class MinesweeperGame {
   }
 
   // Logique "Hardcore Difficulty": Lying Numbers
+  // Logique "Hardcore Difficulty": Lying Numbers
   applyLyingNumbers() {
+      const probability = this.difficulty === 'hardcore' ? 0.125 : (this.lyingChance / 100);
+
       for (let y = 0; y < this.rows; y++) {
           for (let x = 0; x < this.cols; x++) {
               const cell = this.grid[y][x];
               
-              if (!cell.isMine && cell.neighborCount > 0 && Math.random() < 0.125) {
+              if (!cell.isMine && cell.neighborCount > 0 && Math.random() < probability) {
                   const trueNum = cell.neighborCount;
                   let fakeNum;
                   

@@ -14,6 +14,7 @@ interface GridProps {
   isScanning: boolean;
   onScan: () => void;
   myRole?: 'P1' | 'P2' | null;
+  skipRows?: number[];
 }
 
 const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => void, onRightClick: (e: React.MouseEvent) => void }) => {
@@ -83,7 +84,7 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
     );
 };
 
-export default function Grid({ grid, roomId, isScanning, onScan }: GridProps) {
+export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: GridProps) {
     const [cursors, setCursors] = useState<{ [id: string]: { x: number, y: number, role: 'P1'|'P2' } }>({});
     const lastEmit = useRef(0);
 
@@ -139,7 +140,7 @@ export default function Grid({ grid, roomId, isScanning, onScan }: GridProps) {
 
     return (
         <div 
-            className="relative bg-slate-900/50 p-4 rounded-xl shadow-2xl overflow-hidden border border-slate-700/50 backdrop-blur-sm"
+            className="relative w-full h-full"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
         >
@@ -150,6 +151,8 @@ export default function Grid({ grid, roomId, isScanning, onScan }: GridProps) {
                 }}
             >
                 {grid.map((row, y) => (
+                    // Skip rows logic
+                    (skipRows?.includes(y)) ? null :
                     row.map((cell, x) => (
                         <Cell 
                             key={`${x}-${y}`} 
