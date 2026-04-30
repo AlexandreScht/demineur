@@ -1,11 +1,10 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { CellData, GridData } from '@/utils/types';
 import { socket } from '@/utils/socket';
 import { cn } from '@/utils/cn';
 import { Flag, HelpCircle, Bomb } from 'lucide-react';
-import { useRef } from 'react';
 import { MousePointer2 } from 'lucide-react';
 
 interface GridProps {
@@ -15,9 +14,54 @@ interface GridProps {
   onScan: () => void;
   myRole?: 'P1' | 'P2' | null;
   skipRows?: number[];
+  /** Mobile flag-mode: tap places a flag instead of revealing */
+  flagMode?: boolean;
 }
 
-const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => void, onRightClick: (e: React.MouseEvent) => void }) => {
+const LONG_PRESS_MS = 350;
+
+const Cell = ({
+    cell,
+    onClick,
+    onRightClick,
+    onLongPress,
+}: {
+    cell: CellData;
+    onClick: () => void;
+    onRightClick: (e: React.MouseEvent) => void;
+    onLongPress: () => void;
+}) => {
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const didLongPress = useRef(false);
+
+    // ── Touch handlers for long-press flag on mobile ──
+    const handleTouchStart = useCallback(() => {
+        didLongPress.current = false;
+        timerRef.current = setTimeout(() => {
+            didLongPress.current = true;
+            onLongPress();
+        }, LONG_PRESS_MS);
+    }, [onLongPress]);
+
+    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        // If a long-press already fired, suppress the click
+        if (didLongPress.current) {
+            e.preventDefault();
+        }
+    }, []);
+
+    const handleTouchMove = useCallback(() => {
+        // Cancel long-press if finger moves
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+    }, []);
+
     let content = null;
     // Closed cell — solid raised slate tile with subtle top highlight (frosted but opaque)
     let styleClass = "bg-slate-700/80 hover:bg-slate-600/80 border-slate-500/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.25)]";
@@ -31,19 +75,19 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
                 styleClass = "bg-rose-950/30 border-rose-800/40";
                 content = (
                     <div className="relative flex items-center justify-center w-full h-full">
-                        <Flag className="w-5 h-5 text-rose-400/90 relative z-10" />
+                        <Flag className="w-4 h-4 md:w-5 md:h-5 text-rose-400/90 relative z-10" />
                     </div>
                 );
             } else {
-                content = <Bomb className="w-5 h-5 text-rose-400/90" />;
+                content = <Bomb className="w-4 h-4 md:w-5 md:h-5 text-rose-400/90" />;
             }
         } else if (cell.neighborCount > 0) {
             if (cell.lyingNumbers) {
                 content = (
                     <div className="flex items-center justify-center gap-[0.12rem] w-full h-full">
-                        <span className="text-xs md:text-sm font-bold text-amber-400/90">{cell.lyingNumbers[0]}</span>
-                        <span className="text-[0.5rem] md:text-[0.6rem] font-bold text-amber-400/70">/</span>
-                        <span className="text-xs md:text-sm font-bold text-amber-400/90">{cell.lyingNumbers[1]}</span>
+                        <span className="text-[10px] md:text-sm font-bold text-amber-400/90">{cell.lyingNumbers[0]}</span>
+                        <span className="text-[0.4rem] md:text-[0.6rem] font-bold text-amber-400/70">/</span>
+                        <span className="text-[10px] md:text-sm font-bold text-amber-400/90">{cell.lyingNumbers[1]}</span>
                     </div>
                 );
             } else {
@@ -59,12 +103,12 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
                     'text-teal-300',
                     'text-slate-300',
                 ];
-                content = <span className={`font-bold ${colors[cell.neighborCount]}`}>{cell.neighborCount}</span>;
+                content = <span className={`text-xs md:text-sm font-bold ${colors[cell.neighborCount]}`}>{cell.neighborCount}</span>;
             }
         }
     } else {
-        if (cell.flag === 1) content = <Flag className="w-5 h-5 text-rose-400/90" />;
-        if (cell.flag === 2) content = <HelpCircle className="w-6 h-6 text-violet-300/90" />;
+        if (cell.flag === 1) content = <Flag className="w-4 h-4 md:w-5 md:h-5 text-rose-400/90" />;
+        if (cell.flag === 2) content = <HelpCircle className="w-4 h-4 md:w-6 md:h-6 text-violet-300/90" />;
         if (cell.scanned === 'mine') {
             styleClass = "bg-rose-800/40 border-rose-700/50";
         } else if (cell.scanned === 'safe') {
@@ -83,6 +127,9 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
             )}
             onClick={onClick}
             onContextMenu={onRightClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
             whileHover={{ scale: 1.06, zIndex: 10 }}
             whileTap={{ scale: 0.94 }}
         >
@@ -91,9 +138,17 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
     );
 };
 
-export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: GridProps) {
+export default function Grid({ grid, roomId, isScanning, onScan, skipRows, flagMode }: GridProps) {
     const [cursors, setCursors] = useState<{ [id: string]: { x: number, y: number, role: 'P1'|'P2' } }>({});
     const lastEmit = useRef(0);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     useEffect(() => {
         socket.on('partner_cursor', ({ id, x, y, role }) => {
@@ -134,6 +189,9 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
         if (isScanning) {
             socket.emit('scan_cell', { x, y, roomId });
             onScan();
+        } else if (flagMode) {
+            // Mobile flag-mode: tap = flag
+            socket.emit('flag_cell', { x, y, roomId });
         } else {
             socket.emit('click_cell', { x, y, roomId });
         }
@@ -144,6 +202,10 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
         socket.emit('flag_cell', { x, y, roomId });
     };
 
+    const handleLongPress = (x: number, y: number) => {
+        socket.emit('flag_cell', { x, y, roomId });
+    };
+
     return (
         <div
             className="relative w-full h-full"
@@ -151,9 +213,11 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
             onMouseLeave={handleMouseLeave}
         >
             <div
-                className="grid gap-x-1 gap-y-[4px]"
+                className="grid gap-x-[2px] gap-y-[2px] md:gap-x-1 md:gap-y-[4px]"
                 style={{
-                    gridTemplateColumns: `repeat(${grid[0]?.length || 0}, minmax(28px, 1fr))`
+                    gridTemplateColumns: isMobile
+                        ? `repeat(${grid[0]?.length || 0}, 30px)`
+                        : `repeat(${grid[0]?.length || 0}, minmax(0, 1fr))`
                 }}
             >
                 {grid.map((row, y) => (
@@ -164,6 +228,7 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
                             cell={cell}
                             onClick={() => handleCellClick(x, y)}
                             onRightClick={(e) => handleRightClick(e, x, y)}
+                            onLongPress={() => handleLongPress(x, y)}
                         />
                     ))
                 ))}
@@ -172,7 +237,7 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
             {Object.entries(cursors).map(([id, pos]) => (
                 <div
                     key={id}
-                    className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear"
+                    className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear hidden md:block"
                     style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
                     <MousePointer2

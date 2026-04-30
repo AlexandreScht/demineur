@@ -29,6 +29,9 @@ html, body {
   background: var(--bg-base);
   color: var(--foreground);
   min-height: 100vh;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
 /* Ambient global background with soft color blobs */
@@ -239,6 +242,35 @@ body::after {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 body::-webkit-scrollbar { display: none; }
 body { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Board scrollbar — mobile themed ── */
+.board-scroll {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.5) rgba(255, 255, 255, 0.04);
+}
+
+/* Webkit (Chrome / Safari / mobile Chrome) */
+.board-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.board-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 99px;
+}
+.board-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #38bdf8 0%, #a78bfa 100%);
+  border-radius: 99px;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
+}
+.board-scroll::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, #7dd3fc 0%, #c4b5fd 100%);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+}
+.board-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 /* Custom range thumb styling kept invisible (RangeSlider draws its own thumb) */
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; }

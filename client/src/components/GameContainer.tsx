@@ -13,7 +13,7 @@ const GameContainer = ({ isExploding, children, difficulty }: GameContainerProps
     <motion.div
       animate={isExploding ? { x: [-10, 10, -10, 10, 0], y: [-5, 5, -5, 5, 0] } : {}}
       transition={{ duration: 0.5 }}
-      className={`min-h-screen text-white flex flex-col items-center justify-start pt-8 pb-16 px-6 relative ${isExploding ? 'overflow-hidden' : ''}`}
+      className={`min-h-screen text-white flex flex-col items-center justify-start pt-3 pb-6 px-1 md:pt-8 md:pb-16 md:px-6 relative ${isExploding ? 'overflow-hidden' : ''}`}
     >
       {/* Floating ambient blobs */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">

@@ -9,7 +9,7 @@ import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
 import RangeSlider from '@/components/ui/RangeSlider';
 import SocialDrawer from '@/components/SocialDrawer';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus } from 'lucide-react';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, Crosshair, MessageCircle } from 'lucide-react';
 
 const ACCOUNTS_KEY = 'minesweeper_accounts';
 const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
@@ -70,9 +70,15 @@ export default function Home() {
   const [scansAvailable, setScansAvailable] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
 
-  // Board height measured from DOM so it always matches actual cell size
+  // Mobile flag-mode toggle (tap = flag instead of reveal)
+  const [flagMode, setFlagMode] = useState(false);
+
+  // Board ref for measuring
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardInnerH, setBoardInnerH] = useState(0);
+
+  // Mobile social drawer on home page
+  const [homeSocialOpen, setHomeSocialOpen] = useState(false);
 
   // Custom Helpers
   const { customRows, customCols, customMines } = useMemo(() => {
@@ -428,9 +434,13 @@ export default function Home() {
       const cols = grid[0]?.length || 0;
       const rows = grid.length;
       if (!cols || !rows) return;
-      const innerW = boardRef.current.clientWidth - 40; // minus 2×p-5 padding
-      const cellW = Math.max(28, (innerW - (cols - 1) * GAP_X) / cols);
-      setBoardInnerH(rows * cellW + (rows - 1) * GAP_Y);
+      const isMobile = window.innerWidth < 768;
+      const pad = isMobile ? 12 : 40; // p-1.5 vs p-5
+      const gapX = isMobile ? 2 : GAP_X; // gap-x-[2px] vs gap-x-1
+      const gapY = isMobile ? 2 : GAP_Y;
+      const innerW = boardRef.current.clientWidth - pad;
+      const cellW = (innerW - (cols - 1) * gapX) / cols;
+      setBoardInnerH(rows * cellW + (rows - 1) * gapY);
     };
 
     measure();
@@ -574,7 +584,7 @@ export default function Home() {
     <>
         <button
             onClick={() => setSocialOpen(true)}
-            className="fixed bottom-4 left-4 z-30 w-12 h-12 rounded-2xl glass-strong flex items-center justify-center hover:bg-white/[0.08] active:scale-95 transition-all shadow-[0_8px_28px_-8px_rgba(0,0,0,0.6)] border border-white/10"
+            className="fixed bottom-4 left-4 z-30 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl glass-strong flex items-center justify-center hover:bg-white/[0.08] active:scale-95 transition-all shadow-[0_8px_28px_-8px_rgba(0,0,0,0.6)] border border-white/10"
             title="Social"
         >
             <Users className="w-5 h-5 text-cyan-accent" />
@@ -819,7 +829,7 @@ export default function Home() {
                     <div className="flex gap-2 w-full mt-6">
                         <input
                             type="text"
-                            placeholder="Vous avez un code ? Entrez l'ID de la salle"
+                            placeholder="Code de la salle"
                             className="flex-1 px-4 py-3 rounded-2xl text-white focus:outline-none focus:border-cyan-300/60 focus:shadow-[0_0_20px_rgba(56,189,248,0.25)] transition-all placeholder:text-slate-500 glass uppercase"
                             onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                         />
@@ -836,7 +846,7 @@ export default function Home() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="w-full glass-strong p-8 rounded-3xl flex flex-col gap-6"
+                    className="w-full glass-strong p-5 md:p-8 rounded-2xl md:rounded-3xl flex flex-col gap-4 md:gap-6"
                 >
                     <div className="flex justify-between items-center mb-2">
                         <h2 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -851,7 +861,7 @@ export default function Home() {
                     {/* Difficulty */}
                     <div className="space-y-3">
                         <label className="text-slate-300/70 text-xs font-semibold uppercase tracking-[0.15em]">Difficulté</label>
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                             {['easy', 'medium', 'hard', 'hardcore', 'custom'].map((d) => (
                                 <button
                                     key={d}
@@ -984,6 +994,31 @@ export default function Home() {
                 />
             </aside>
         )}
+
+        {/* ── Mobile social toggle (visible only on < lg when sidebar is hidden) ── */}
+        {activeAccount && (
+            <>
+                <button
+                    onClick={() => setHomeSocialOpen(true)}
+                    className="lg:hidden fixed bottom-4 right-4 z-30 w-12 h-12 rounded-2xl glass-strong flex items-center justify-center hover:bg-white/[0.08] active:scale-95 transition-all shadow-[0_8px_28px_-8px_rgba(0,0,0,0.6)] border border-white/10"
+                    title="Social"
+                >
+                    <Users className="w-5 h-5 text-cyan-accent" />
+                    {(incomingRequests.length + incomingFriendRequests.length) > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-gradient-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
+                            {incomingRequests.length + incomingFriendRequests.length}
+                        </span>
+                    )}
+                </button>
+                <SocialDrawer
+                    isOpen={homeSocialOpen}
+                    onClose={() => setHomeSocialOpen(false)}
+                    variant="drawer"
+                    activePseudo={activeAccount.pseudo}
+                    activeTag={activeAccount.tag}
+                />
+            </>
+        )}
         {renderNotificationCorner(false)}
       </main>
     );
@@ -995,37 +1030,37 @@ export default function Home() {
 
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header className="w-full flex justify-between items-center mb-6 px-2 max-w-7xl mx-auto gap-3">
+      <header className="w-full flex justify-between items-center mb-2 md:mb-6 px-1 md:px-2 max-w-7xl mx-auto gap-1 md:gap-3">
 
           {/* ── Left HUD Bar ── */}
-          <div className="flex items-stretch bg-slate-900/90 rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden">
+          <div className="flex items-stretch bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 shadow-md shadow-black/40 overflow-hidden">
 
              {/* MENU */}
              <button
                 onClick={leaveRoom}
-                className="flex items-center gap-2 px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
+                className="flex items-center gap-1 md:gap-2 px-2 md:px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
                 title="Back to menu"
              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="text-[11px] font-bold tracking-widest uppercase">Menu</span>
+                <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span className="text-[10px] md:text-[11px] font-bold tracking-widest uppercase hidden sm:inline">Menu</span>
              </button>
 
              {/* Level (hardcore) — amber accent */}
              {setupMode === 'hardcore' && (
-                 <div className="relative flex items-center gap-2 px-4 border-r border-slate-700/50">
-                     <Trophy className="w-4 h-4 text-amber-400" />
-                     <span className="text-white font-mono font-bold text-sm tabular-nums">{score + 1}</span>
+                 <div className="relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50">
+                     <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-400" />
+                     <span className="text-white font-mono font-bold text-xs md:text-sm tabular-nums">{score + 1}</span>
                      <span className="text-slate-500 text-[10px] font-semibold uppercase hidden sm:block">Lv</span>
                      <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-amber-400" />
                  </div>
              )}
 
              {/* Mine Counter — rose accent when negative */}
-             <div className={`relative flex items-center gap-2 px-4 border-r border-slate-700/50 ${
+             <div className={`relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 ${
                  remainingMines < 0 ? 'bg-rose-500/10' : ''
              }`}>
-                 <FlagIcon className={`w-4 h-4 ${remainingMines < 0 ? 'text-rose-400 fill-rose-400' : 'text-rose-400/70 fill-rose-400/30'}`} />
-                 <span className={`font-mono font-bold text-sm tabular-nums ${remainingMines < 0 ? 'text-rose-300' : 'text-white'}`}>
+                 <FlagIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${remainingMines < 0 ? 'text-rose-400 fill-rose-400' : 'text-rose-400/70 fill-rose-400/30'}`} />
+                 <span className={`font-mono font-bold text-xs md:text-sm tabular-nums ${remainingMines < 0 ? 'text-rose-300' : 'text-white'}`}>
                      {remainingMines}
                  </span>
                  {remainingMines < 0 && (
@@ -1038,7 +1073,7 @@ export default function Home() {
                  onClick={() => scansAvailable > 0 && setIsScanning(!isScanning)}
                  disabled={scansAvailable <= 0}
                  title="Scanner Tool"
-                 className={`relative flex hover:cursor-pointer items-center gap-2 px-4 border-r border-slate-700/50 transition-colors ${
+                 className={`relative flex hover:cursor-pointer items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 transition-colors ${
                      isScanning
                          ? 'bg-emerald-500/10 text-emerald-200'
                          : scansAvailable > 0
@@ -1046,11 +1081,27 @@ export default function Home() {
                              : 'text-slate-600 cursor-not-allowed'
                  }`}
              >
-                 <Radar className={`w-4 h-4 ${isScanning ? 'text-emerald-400' : scansAvailable > 0 ? 'text-emerald-500/70' : 'text-slate-600'}`} />
-                 <span className="font-mono font-bold text-sm tabular-nums">{scansAvailable}</span>
+                 <Radar className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isScanning ? 'text-emerald-400' : scansAvailable > 0 ? 'text-emerald-500/70' : 'text-slate-600'}`} />
+                 <span className="font-mono font-bold text-xs md:text-sm tabular-nums">{scansAvailable}</span>
                  {isScanning && (
                      <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-emerald-400" />
                  )}
+             </button>
+
+             {/* Mobile-only: Flag / Reveal toggle */}
+             <button
+                 onClick={() => setFlagMode(!flagMode)}
+                 title={flagMode ? 'Mode Drapeau (tap = flag)' : 'Mode Révéler (tap = reveal)'}
+                 className={`relative flex md:hidden items-center gap-1 px-2 border-r border-slate-700/50 transition-colors ${
+                     flagMode
+                         ? 'bg-rose-500/15 text-rose-300'
+                         : 'text-slate-300 hover:text-white'
+                 }`}
+             >
+                 {flagMode
+                     ? <FlagIcon className="w-3.5 h-3.5 text-rose-400 fill-rose-400/40" />
+                     : <Crosshair className="w-3.5 h-3.5" />
+                 }
              </button>
 
              {/* Room ID */}
@@ -1068,21 +1119,21 @@ export default function Home() {
           </div>
 
           {/* ── Right: Hearts ── */}
-          <div className="flex items-center gap-1 bg-slate-900/90 rounded-2xl border border-slate-600/40 h-11 px-3.5 shadow-md shadow-black/40">
+          <div className="flex items-center gap-1 bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 px-2 md:px-3.5 shadow-md shadow-black/40">
               {[...Array(3)].map((_, i) => (
                   <div
                      key={i}
                      className={i < hp ? `heart-wave-${i}` : ''}
                   >
                       <Heart
-                         className={`w-4 h-4 fill-current ${
+                         className={`w-3.5 h-3.5 md:w-4 md:h-4 fill-current ${
                              i < hp ? 'text-rose-400' : 'text-slate-700'
                          }`}
                       />
                   </div>
               ))}
               {hp > 3 && (
-                  <span className="text-rose-300 font-bold text-[11px] font-mono ml-0.5 px-1.5 py-0.5 rounded bg-rose-500/15">
+                  <span className="text-rose-300 font-bold text-[10px] md:text-[11px] font-mono ml-0.5 px-1 md:px-1.5 py-0.5 rounded bg-rose-500/15">
                       +{hp - 3}
                   </span>
               )}
@@ -1092,16 +1143,15 @@ export default function Home() {
 
        {/* GAME BOARD WINDOW */}
        <div className="w-full flex justify-center">
-            {/* Glass shell: width capped at target size, cells adapt via 1fr columns */}
+            {/* Glass shell — on mobile, allow scroll in both directions instead of squishing */}
             <div
                 ref={boardRef}
-                className="glass-strong p-5 rounded-2xl"
-                style={{ width: `min(${boardMaxW}px, 92vw)` }}
+                className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-80px)] md:max-h-none"
+                style={{ width: `min(${boardMaxW}px, 98vw)` }}
             >
-                {/* Inner clip: height measured from DOM, so no empty space ever */}
                 <div
-                    className="relative overflow-hidden"
-                    style={{ height: boardInnerH || undefined }}
+                    className="relative"
+                    style={{ minWidth: boardCols > 10 ? `${boardCols * 32 + (boardCols - 1) * 2}px` : undefined }}
                 >
                     <motion.div
                         className={`w-full ${isTransitioning ? 'pointer-events-none' : ''}`}
@@ -1117,13 +1167,14 @@ export default function Home() {
                             myRole={myRole}
                             isScanning={isScanning}
                             onScan={() => setIsScanning(false)}
+                            flagMode={flagMode}
                         />
                     </motion.div>
                 </div>
             </div>
        </div>
 
-      <div className="fixed bottom-4 right-4 text-xs text-slate-500 flex items-center gap-2 glass px-3 py-1.5 rounded-full">
+      <div className="hidden md:flex fixed bottom-4 right-4 text-xs text-slate-500 items-center gap-2 glass px-3 py-1.5 rounded-full">
          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
          Serveur : Connecté
       </div>
@@ -1140,11 +1191,11 @@ export default function Home() {
                     <motion.div
                         initial={{ scale: 0.9, y: 20 }}
                         animate={{ scale: 1, y: 0 }}
-                        className="glass-strong glass-tint-coral p-8 rounded-3xl max-w-md w-full text-center"
+                        className="glass-strong glass-tint-coral p-5 md:p-8 rounded-3xl max-w-md w-full text-center"
                         style={{ boxShadow: '0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px -10px rgba(251,113,133,0.45)' }}
                     >
-                        <h2 className="text-5xl font-black text-rose-300 mb-2 drop-shadow-[0_0_15px_rgba(251,113,133,0.5)]">ÉCHEC CRITIQUE</h2>
-                        <p className="text-slate-300 mb-8 text-lg">Vous avez échoué ! (perdant)</p>
+                        <h2 className="text-3xl md:text-5xl font-black text-rose-300 mb-2 drop-shadow-[0_0_15px_rgba(251,113,133,0.5)]">ÉCHEC CRITIQUE</h2>
+                        <p className="text-slate-300 mb-5 md:mb-8 text-base md:text-lg">Vous avez échoué ! (perdant)</p>
 
                         <div className="flex flex-col gap-3">
                             <button
@@ -1218,11 +1269,11 @@ export default function Home() {
                     <motion.div
                         initial={{ scale: 0.9, y: 20 }}
                         animate={{ scale: 1, y: 0 }}
-                        className="glass-strong glass-tint-mint p-8 rounded-3xl max-w-md w-full text-center"
+                        className="glass-strong glass-tint-mint p-5 md:p-8 rounded-3xl max-w-md w-full text-center"
                         style={{ boxShadow: '0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px -10px rgba(52,211,153,0.45)' }}
                     >
-                        <h2 className="text-5xl font-black text-mint-accent mb-2 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Bravo !</h2>
-                        <p className="text-slate-300 mb-8 text-lg">Secteur dégagé avec succès !</p>
+                        <h2 className="text-3xl md:text-5xl font-black text-mint-accent mb-2 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Bravo !</h2>
+                        <p className="text-slate-300 mb-5 md:mb-8 text-base md:text-lg">Secteur dégagé avec succès !</p>
 
                         <div className="flex flex-col gap-3">
                             <button
