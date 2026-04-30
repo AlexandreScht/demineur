@@ -23,3 +23,42 @@ export interface GameInitData {
     difficulty?: string;
     level?: number;
 }
+
+export interface Account {
+    pseudo: string;
+    tag: string;
+}
+
+export interface AccountInfo extends Account {
+    currentRoomId: string | null;
+    gameMode: string | null;
+    gameDifficulty: string | null;
+    gameLevel: number | null;
+    notFound?: boolean;
+}
+
+export interface Friend {
+    pseudo: string;
+    tag: string;
+    online: boolean;
+    inGame: boolean;
+    gameMode: string | null;
+    gameDifficulty: string | null;
+    gameLevel: number | null;
+    roomId: string | null;
+    notFound?: boolean;
+}
+
+export interface IncomingJoinRequest {
+    fromPseudo: string;
+    fromTag: string;
+    roomId: string;
+    receivedAt: number;
+    expiresAt: number;
+}
+
+export interface IncomingFriendRequest {
+    fromPseudo: string;
+    fromTag: string;
+    receivedAt: number;
+}

@@ -1,47 +1,250 @@
 @import "tailwindcss";
 
 :root {
-  --background: #000000;
-  --foreground: #ffffff;
+  --bg-base: #0b1020;
+  --bg-soft: #11172d;
+  --bg-elev: #181f3a;
+  --foreground: #e8ecff;
+
+  --accent-cyan: #38bdf8;
+  --accent-violet: #a78bfa;
+  --accent-mint: #34d399;
+  --accent-amber: #fbbf24;
+  --accent-coral: #fb7185;
+
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-strong: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-strong: rgba(255, 255, 255, 0.18);
+  --glass-highlight: rgba(255, 255, 255, 0.22);
+
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  --shadow-glow-cyan: 0 0 40px -10px rgba(56, 189, 248, 0.45);
+  --shadow-glow-violet: 0 0 40px -10px rgba(167, 139, 250, 0.45);
+  --shadow-glow-mint: 0 0 40px -10px rgba(52, 211, 153, 0.45);
+  --shadow-glow-coral: 0 0 40px -10px rgba(251, 113, 133, 0.45);
 }
 
-body {
-  background: var(--background);
+html, body {
+  background: var(--bg-base);
   color: var(--foreground);
+  min-height: 100vh;
 }
 
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+/* Ambient global background with soft color blobs */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 10%, rgba(56, 189, 248, 0.18), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 20%, rgba(167, 139, 250, 0.18), transparent 60%),
+    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(52, 211, 153, 0.14), transparent 60%),
+    linear-gradient(180deg, #0b1020 0%, #0a0e1c 100%);
 }
 
-.blink-anim {
-  animation: blink 1s infinite;
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+  pointer-events: none;
 }
 
-.glitch-effect {
+/* === Liquid Glass utility classes === */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.2),
+    var(--shadow-soft);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.25),
+    0 20px 60px -15px rgba(0, 0, 0, 0.6);
+}
+
+.glass-soft {
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-tint-cyan {
+  background:
+    linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.04));
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+.glass-tint-violet {
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.12), rgba(167, 139, 250, 0.04));
+  border: 1px solid rgba(167, 139, 250, 0.25);
+}
+.glass-tint-mint {
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(52, 211, 153, 0.04));
+  border: 1px solid rgba(52, 211, 153, 0.25);
+}
+.glass-tint-coral {
+  background:
+    linear-gradient(135deg, rgba(251, 113, 133, 0.14), rgba(251, 113, 133, 0.04));
+  border: 1px solid rgba(251, 113, 133, 0.3);
+}
+.glass-tint-amber {
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.04));
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+/* Subtle moving sheen on glass surfaces */
+.glass-sheen {
   position: relative;
+  overflow: hidden;
+}
+.glass-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.06) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.8s ease;
+  pointer-events: none;
+}
+.glass-sheen:hover::after {
+  transform: translateX(100%);
 }
 
-/* Hiding scrollbars */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+/* Vivid accent text */
+.text-cyan-accent { color: #7dd3fc; }
+.text-violet-accent { color: #c4b5fd; }
+.text-mint-accent { color: #6ee7b7; }
+.text-amber-accent { color: #fcd34d; }
+.text-coral-accent { color: #fda4af; }
+
+/* Animations */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
-.no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+.blink-anim { animation: blink 1s infinite; }
+
+@keyframes float-blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 25px) scale(0.95); }
+}
+.animate-float-blob { animation: float-blob 14s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.text-shimmer {
+  background: linear-gradient(90deg, #7dd3fc 0%, #c4b5fd 35%, #fda4af 70%, #7dd3fc 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
 }
 
-/* Also hide scrollbar for body generally if desired, or just utility */
-body::-webkit-scrollbar {
-  display: none;
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
 }
-body {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+.animate-spin-slow { animation: spin-slow 3s linear infinite; }
+
+/* Heartbeat wave — each heart pumps at a different point in the cycle */
+@keyframes heart-wave-0 {
+  0%   { transform: scale(1); }
+  2%   { transform: scale(1.2); }
+  4%   { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+@keyframes heart-wave-1 {
+  0%   { transform: scale(1); }
+  5%   { transform: scale(1); }
+  7%   { transform: scale(1.2); }
+  9%   { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+@keyframes heart-wave-2 {
+  0%   { transform: scale(1); }
+  10%  { transform: scale(1); }
+  12%  { transform: scale(1.2); }
+  14%  { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+.heart-wave-0 { animation: heart-wave-0 7s ease-in-out infinite; }
+.heart-wave-1 { animation: heart-wave-1 7s ease-in-out infinite; }
+.heart-wave-2 { animation: heart-wave-2 7s ease-in-out infinite; }
+
+/* HUD capsule — deeper glass with extra depth */
+.hud-capsule {
+  background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.3),
+    0 8px 32px -8px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+/* Animated shimmer line under the HUD */
+@keyframes hud-shimmer {
+  0% { transform: translateX(-100%); opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+.hud-border-shimmer {
+  overflow: hidden;
+}
+.hud-border-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.6) 40%, rgba(167,139,250,0.6) 60%, transparent 100%);
+  animation: hud-shimmer 4s ease-in-out infinite;
+}
+
+/* Heartbeat pulse */
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  15% { transform: scale(1.15); }
+  30% { transform: scale(1); }
+  45% { transform: scale(1.08); }
+  60% { transform: scale(1); }
+}
+.animate-heartbeat { animation: heartbeat 2.5s ease-in-out infinite; }
+
+/* Hide scrollbars */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+body::-webkit-scrollbar { display: none; }
+body { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Custom range thumb styling kept invisible (RangeSlider draws its own thumb) */
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; }
+
+/* Focus ring */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4), 0 0 20px rgba(56, 189, 248, 0.2);
 }

@@ -18,50 +18,57 @@ interface GridProps {
 }
 
 const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => void, onRightClick: (e: React.MouseEvent) => void }) => {
-    // Determine content
     let content = null;
-    let styleClass = "bg-slate-700 hover:bg-slate-600";
-    
+    // Closed cell — solid raised slate tile with subtle top highlight (frosted but opaque)
+    let styleClass = "bg-slate-700/80 hover:bg-slate-600/80 border-slate-500/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.25)]";
+
     if (cell.isOpen) {
-        styleClass = "bg-slate-800";
+        // Open cell — recessed but still solid, calm slate
+        styleClass = "bg-slate-800/70 border-slate-600/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]";
         if (cell.isMine) {
-            styleClass = "bg-red-900/30 border-red-800";
+            styleClass = "bg-rose-900/40 border-rose-700/40";
             if (cell.flag === 1) {
-                styleClass = "bg-red-950/20 border-red-800"; 
+                styleClass = "bg-rose-950/30 border-rose-800/40";
                 content = (
                     <div className="relative flex items-center justify-center w-full h-full">
-                        <Flag className="w-6 h-6 text-red-600/80 relative z-10 drop-shadow-md" />
+                        <Flag className="w-5 h-5 text-rose-400/90 relative z-10" />
                     </div>
                 );
             } else {
-                content = <Bomb className="w-5 h-5 text-red-700" />;
+                content = <Bomb className="w-5 h-5 text-rose-400/90" />;
             }
         } else if (cell.neighborCount > 0) {
-            // Quantum display, Lying numbers or Normal
             if (cell.lyingNumbers) {
                 content = (
                     <div className="flex items-center justify-center gap-[0.12rem] w-full h-full">
-                        <span className="text-xs md:text-sm font-black text-orange-400 drop-shadow-sm">{cell.lyingNumbers[0]}</span>
-                        <span className="text-[0.5rem] md:text-[0.6rem] font-black text-orange-400 drop-shadow-sm">-</span>
-                        <span className="text-xs md:text-sm font-black text-orange-400 drop-shadow-sm">{cell.lyingNumbers[1]}</span>
+                        <span className="text-xs md:text-sm font-bold text-amber-400/90">{cell.lyingNumbers[0]}</span>
+                        <span className="text-[0.5rem] md:text-[0.6rem] font-bold text-amber-400/70">/</span>
+                        <span className="text-xs md:text-sm font-bold text-amber-400/90">{cell.lyingNumbers[1]}</span>
                     </div>
                 );
             } else {
+                // Muted palette inspired by the original — cohesive with the dark slate cell
                 const colors = [
-                    '', 'text-blue-400', 'text-green-400', 'text-red-400', 'text-purple-400', 
-                    'text-yellow-600', 'text-pink-400', 'text-teal-400', 'text-gray-400'
+                    '',
+                    'text-sky-400',
+                    'text-emerald-400',
+                    'text-rose-400',
+                    'text-violet-400',
+                    'text-amber-500',
+                    'text-pink-400',
+                    'text-teal-300',
+                    'text-slate-300',
                 ];
                 content = <span className={`font-bold ${colors[cell.neighborCount]}`}>{cell.neighborCount}</span>;
             }
         }
     } else {
-        // Closed State
-        if (cell.flag === 1) content = <Flag className="w-6 h-6 text-red-600/80" />;
-        if (cell.flag === 2) content = <HelpCircle className="w-7 h-7 text-violet-400" />;
+        if (cell.flag === 1) content = <Flag className="w-5 h-5 text-rose-400/90" />;
+        if (cell.flag === 2) content = <HelpCircle className="w-6 h-6 text-violet-300/90" />;
         if (cell.scanned === 'mine') {
-            styleClass = "bg-red-800/30 border-2 border-red-900";
+            styleClass = "bg-rose-800/40 border-rose-700/50";
         } else if (cell.scanned === 'safe') {
-            styleClass = "bg-green-500/50 border-2 border-green-700";
+            styleClass = "bg-emerald-700/40 border-emerald-600/50";
         }
     }
 
@@ -71,13 +78,13 @@ const Cell = ({ cell, onClick, onRightClick }: { cell: CellData, onClick: () => 
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className={cn(
-                "w-8 h-8 md:w-10 md:h-10 border border-slate-600 rounded-sm flex items-center justify-center cursor-pointer select-none transition-colors duration-100",
+                "w-full aspect-square border rounded-md flex items-center justify-center cursor-pointer select-none transition-colors duration-100",
                 styleClass
             )}
             onClick={onClick}
             onContextMenu={onRightClick}
-            whileHover={{ scale: 1.05, zIndex: 10 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.06, zIndex: 10 }}
+            whileTap={{ scale: 0.94 }}
         >
             {content}
         </motion.div>
@@ -112,7 +119,6 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
         if (now - lastEmit.current < 30) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
-        // Calculate percentage (0-100) relative to the container size
         const x = ((e.clientX - rect.left) / rect.width) * 100;
         const y = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -139,41 +145,40 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows }: Gri
     };
 
     return (
-        <div 
+        <div
             className="relative w-full h-full"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
         >
-            <div 
-                className="grid gap-1"
-                style={{ 
-                    gridTemplateColumns: `repeat(${grid[0]?.length || 0}, minmax(0, 1fr))` 
+            <div
+                className="grid gap-x-1 gap-y-[4px]"
+                style={{
+                    gridTemplateColumns: `repeat(${grid[0]?.length || 0}, minmax(28px, 1fr))`
                 }}
             >
                 {grid.map((row, y) => (
-                    // Skip rows logic
                     (skipRows?.includes(y)) ? null :
                     row.map((cell, x) => (
-                        <Cell 
-                            key={`${x}-${y}`} 
-                            cell={cell} 
+                        <Cell
+                            key={`${x}-${y}`}
+                            cell={cell}
                             onClick={() => handleCellClick(x, y)}
                             onRightClick={(e) => handleRightClick(e, x, y)}
                         />
                     ))
                 ))}
             </div>
-            
+
             {Object.entries(cursors).map(([id, pos]) => (
-                <div 
+                <div
                     key={id}
                     className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear"
                     style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
                 >
-                     <MousePointer2 
-                        className="w-8 h-8 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)] text-yellow-400 fill-yellow-400/20" 
+                    <MousePointer2
+                        className="w-7 h-7 drop-shadow-[0_0_10px_rgba(167,139,250,0.7)] text-violet-300 fill-violet-300/30"
                         strokeWidth={1.5}
-                     />
+                    />
                 </div>
             ))}
         </div>

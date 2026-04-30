@@ -3,18 +3,21 @@ const { Client } = require('pg');
 const schema = require('./schema');
 require('dotenv').config();
 
-// Create a client with connection string from environment
 const client = new Client({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Connect immediately
-client.connect().then(() => {
-    console.log('Connected to PostgreSQL database');
-}).catch(err => {
-    console.error('Failed to connect to database. Make sure DATABASE_URL is set in .env', err);
-});
-
 const db = drizzle(client, { schema });
 
-module.exports = { db };
+// Called once at startup — connect then run pending migrations
+async function connectAndMigrate() {
+    await client.connect();
+    console.log('Connected to PostgreSQL database');
+
+    const { migrate } = require('drizzle-orm/node-postgres/migrator');
+    const path = require('path');
+    await migrate(db, { migrationsFolder: path.join(__dirname, '..', 'drizzle') });
+    console.log('Migrations applied');
+}
+
+module.exports = { db, connectAndMigrate };
