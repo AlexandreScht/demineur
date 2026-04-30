@@ -46,7 +46,7 @@ export default function SocialDrawer({
             setHasFetched(true);
         }
         function onFriendAdded({ pseudo, tag }: { pseudo: string; tag: string }) {
-            toast.success(`${pseudo}#${tag} is now your friend`);
+            toast.success(`${pseudo}#${tag} est maintenant votre ami`);
             setAddInput('');
             socket.emit('fetch_friends');
         }
@@ -57,31 +57,31 @@ export default function SocialDrawer({
             toast.error(reason || 'Friend error');
         }
         function onFriendRequestSent({ friendPseudo, friendTag }: { friendPseudo: string; friendTag: string }) {
-            toast.success(`Friend request sent to ${friendPseudo}#${friendTag}`);
+            toast.success(`Demande d'ami envoyée à ${friendPseudo}#${friendTag}`);
             setAddInput('');
         }
         function onFriendRequestAccepted({ byPseudo, byTag }: { byPseudo: string; byTag: string }) {
-            toast.success(`${byPseudo}#${byTag} accepted your friend request`);
+            toast.success(`${byPseudo}#${byTag} a accepté votre demande d'ami`);
             socket.emit('fetch_friends');
         }
         function onFriendRequestDeclined({ byPseudo, byTag }: { byPseudo: string; byTag: string }) {
-            toast(`${byPseudo}#${byTag} declined your friend request`);
+            toast(`${byPseudo}#${byTag} a refusé votre demande d'ami`);
         }
         function onJoinRequestSent({ friendPseudo, friendTag }: { friendPseudo: string; friendTag: string }) {
             const k = friendKey(friendPseudo, friendTag);
             setPendingOutgoing(prev => { const next = new Set(prev); next.add(k); return next; });
-            toast.success(`Request sent to ${friendPseudo}#${friendTag}`);
+            toast.success(`Demande envoyée à ${friendPseudo}#${friendTag}`);
             setTimeout(() => {
                 setPendingOutgoing(prev => { const next = new Set(prev); next.delete(k); return next; });
             }, 60_000);
         }
         function onJoinRequestError({ reason }: { reason: string }) {
-            toast.error(reason || 'Cannot send request');
+            toast.error(reason || 'Impossible d\'envoyer la demande');
         }
         function onJoinRequestDeclined({ fromPseudo, fromTag }: { fromPseudo: string; fromTag: string }) {
             const k = friendKey(fromPseudo, fromTag);
             setPendingOutgoing(prev => { const next = new Set(prev); next.delete(k); return next; });
-            toast(`${fromPseudo}#${fromTag} declined your request`);
+            toast(`${fromPseudo}#${fromTag} a refusé votre demande`);
         }
         function onFriendStatusUpdate(updated: Friend) {
             setFriends(prev => {
@@ -122,7 +122,7 @@ export default function SocialDrawer({
 
     const handleAdd = () => {
         const m = addInput.trim().match(/^(.+?)#([A-Za-z0-9]{4})$/);
-        if (!m) { toast.error('Format: Pseudo#XXXX'); return; }
+        if (!m) { toast.error('Format : Pseudo#XXXX'); return; }
         socket.emit('send_friend_request', { friendPseudo: m[1].trim(), friendTag: m[2].toUpperCase() });
     };
 
@@ -138,7 +138,7 @@ export default function SocialDrawer({
         if (!activePseudo || !activeTag) return;
         navigator.clipboard.writeText(`${activePseudo}#${activeTag}`);
         setCopied(true);
-        toast.success('Pseudo copied to clipboard');
+        toast.success('Pseudo copié dans le presse-papiers');
         setTimeout(() => setCopied(false), 2000);
     };
 
@@ -169,7 +169,7 @@ export default function SocialDrawer({
             {activePseudo && activeTag && (
                 <div className="p-4 border-b border-white/10 shrink-0">
                     <label className="text-slate-300/70 text-[11px] font-bold uppercase tracking-[0.2em] mb-2 block">
-                        Your ID
+                        Votre ID
                     </label>
                     <button
                         onClick={handleCopyMyId}
@@ -179,7 +179,7 @@ export default function SocialDrawer({
                             <div className="font-bold text-white truncate">
                                 {activePseudo}<span className="font-mono text-slate-400 text-[12px]">#{activeTag}</span>
                             </div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">Click to copy &amp; share</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Cliquer pour copier &amp; partager</div>
                         </div>
                         <div className={`shrink-0 p-1.5 rounded-lg transition-colors ${copied ? 'bg-emerald-400/15 text-emerald-300' : 'glass text-slate-400 group-hover:text-white'}`}>
                             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -190,7 +190,7 @@ export default function SocialDrawer({
 
             <div className="p-5 border-b border-white/10 shrink-0">
                 <label className="text-slate-300/70 text-[11px] font-bold uppercase tracking-[0.2em] mb-2 block">
-                    Add a friend
+                    Ajouter un ami
                 </label>
                 <div className="flex gap-2">
                     <input
@@ -214,15 +214,15 @@ export default function SocialDrawer({
                         ASK
                     </button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-2">They&apos;ll receive a request to accept.</p>
+                <p className="text-[10px] text-slate-500 mt-2">Ils recevront une demande à accepter.</p>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 no-scrollbar">
                 {!hasFetched ? (
-                    <div className="text-center text-slate-500 text-xs mt-12">Loading…</div>
+                    <div className="text-center text-slate-500 text-xs mt-12">Chargement…</div>
                 ) : sortedFriends.length === 0 ? (
                     <div className="text-center text-slate-500 text-sm mt-12 px-4">
-                        No friends yet. Add one above using their <span className="font-mono text-slate-300">Pseudo#TAG</span>.
+                        Pas encore d&apos;amis. Ajoutez-en un avec leur <span className="font-mono text-slate-300">Pseudo#TAG</span>.
                     </div>
                 ) : (
                     <div className="flex flex-col gap-2">
@@ -264,16 +264,16 @@ export default function SocialDrawer({
                                         </div>
                                         <div className="text-[11px] mt-0.5 truncate">
                                             {f.notFound ? (
-                                                <span className="text-slate-500">Account not found</span>
+                                                <span className="text-slate-500">Compte introuvable</span>
                                             ) : f.inGame ? (
                                                 <span className={inGameTextColor}>
-                                                    In game · <span className="capitalize">{f.gameDifficulty || ''}</span>
+                                                    En jeu · <span className="capitalize">{f.gameDifficulty || ''}</span>
                                                     {isHardcore && f.gameLevel ? ` · Lv ${f.gameLevel}` : ''}
                                                 </span>
                                             ) : f.online ? (
-                                                <span className="text-emerald-300/80">Online</span>
+                                                <span className="text-emerald-300/80">En ligne</span>
                                             ) : (
-                                                <span className="text-slate-500">Offline</span>
+                                                <span className="text-slate-500">Hors ligne</span>
                                             )}
                                         </div>
                                     </div>
@@ -282,7 +282,7 @@ export default function SocialDrawer({
                                         <button
                                             onClick={() => handleRequestJoin(f)}
                                             disabled={pending}
-                                            title={pending ? 'Request pending…' : 'Ask to join their game'}
+                                            title={pending ? 'Demande en attente…' : 'Demander à rejoindre sa partie'}
                                             className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
                                                 pending
                                                     ? 'glass text-slate-400 cursor-not-allowed'
@@ -292,13 +292,13 @@ export default function SocialDrawer({
                                             }`}
                                         >
                                             <Send className="w-3 h-3" />
-                                            {pending ? 'SENT' : 'JOIN'}
+                                            {pending ? 'ENVOYÉ' : 'REJOINDRE'}
                                         </button>
                                     )}
                                     <button
                                         onClick={() => handleRemove(f)}
                                         className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                        title="Remove friend"
+                                        title="Retirer l'ami"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>

@@ -243,12 +243,12 @@ export default function Home() {
         localStorage.setItem(ACTIVE_ACCOUNT_KEY, JSON.stringify(newAcc));
         setNewPseudoInput('');
         setIsCreatingAccount(false);
-        toast.success(`Account ${pseudo}#${tag} created`);
+        toast.success(`Compte ${pseudo}#${tag} créé`);
     }
 
     function onAccountError({ reason }: { reason: string }) {
         setIsCreatingAccount(false);
-        toast.error(reason || 'Account error');
+        toast.error(reason || 'Erreur compte');
     }
 
     function onJoinRequest({ fromPseudo, fromTag, roomId, expiresInMs }: { fromPseudo: string; fromTag: string; roomId: string; expiresInMs?: number }) {
@@ -262,7 +262,7 @@ export default function Home() {
     }
 
     function onJoinRequestAccepted({ roomId }: { roomId: string }) {
-        toast.success('Request accepted, joining…');
+        toast.success('Demande acceptée, connexion en cours…');
         const stored = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
         let acc: Account | null = null;
         if (stored) {
@@ -501,7 +501,7 @@ export default function Home() {
                         <UserPlus className="w-4 h-4 text-cyan-accent" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Friend request</div>
+                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande d&apos;ami</div>
                         <div className="text-sm font-bold text-white truncate">
                             {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
                         </div>
@@ -509,14 +509,14 @@ export default function Home() {
                     <button
                         onClick={() => acceptFriendRequest(req)}
                         className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
-                        title="Accept"
+                        title="Accepter"
                     >
                         <Check className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => declineFriendRequest(req)}
                         className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-                        title="Decline"
+                        title="Refuser"
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
@@ -534,7 +534,7 @@ export default function Home() {
                         <MailPlus className="w-4 h-4 text-violet-accent" />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Join request</div>
+                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande de rejoindre</div>
                         <div className="text-sm font-bold text-white truncate">
                             {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
                         </div>
@@ -542,14 +542,14 @@ export default function Home() {
                     <button
                         onClick={() => acceptJoinRequest(req)}
                         className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
-                        title="Accept"
+                        title="Accepter"
                     >
                         <Check className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={() => declineJoinRequest(req)}
                         className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-                        title="Decline"
+                        title="Refuser"
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
@@ -615,7 +615,7 @@ export default function Home() {
                     {accounts.length > 0 && (
                         <div className="flex flex-col gap-3">
                             <label className="text-slate-300/70 text-xs font-bold uppercase tracking-[0.2em] ml-1">
-                                Your accounts
+                                Vos comptes
                             </label>
                             <div className="flex flex-col gap-2">
                                 {accounts.map((acc) => {
@@ -650,7 +650,7 @@ export default function Home() {
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-xs text-slate-500 mt-0.5">No active game</div>
+                                                    <div className="text-xs text-slate-500 mt-0.5">Aucune partie active</div>
                                                 )}
                                             </div>
 
@@ -659,7 +659,7 @@ export default function Home() {
                                                     <button
                                                         onClick={() => handleResumeGame(acc, info.currentRoomId as string)}
                                                         className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-300 to-fuchsia-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_14px_rgba(167,139,250,0.4)] flex items-center gap-1"
-                                                        title="Resume game"
+                                                        title="Reprendre la partie"
                                                     >
                                                         <Play className="w-3 h-3" /> RESUME
                                                     </button>
@@ -667,14 +667,14 @@ export default function Home() {
                                                 <button
                                                     onClick={() => handleSelectAccount(acc)}
                                                     className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-300 to-sky-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_14px_rgba(56,189,248,0.4)] flex items-center gap-1"
-                                                    title="Use this account"
+                                                    title="Utiliser ce compte"
                                                 >
                                                     <LogIn className="w-3 h-3" /> SELECT
                                                 </button>
                                                 <button
                                                     onClick={() => handleRemoveAccount(acc)}
                                                     className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
-                                                    title="Remove from this device"
+                                                    title="Supprimer de cet appareil"
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>
@@ -689,12 +689,12 @@ export default function Home() {
                     {/* CREATE NEW ACCOUNT */}
                     <div className="flex flex-col gap-3">
                         <label className="text-slate-300/70 text-xs font-bold uppercase tracking-[0.2em] ml-1">
-                            {accounts.length > 0 ? 'Or create a new account' : 'Create your first account'}
+                            {accounts.length > 0 ? 'Ou créer un nouveau compte' : 'Créer votre premier compte'}
                         </label>
                         <div className="flex gap-2">
                             <input
                                 type="text"
-                                placeholder="Pseudo (a tag #XXXX is auto-generated)"
+                                placeholder="Pseudo (un tag #XXXX est généré automatiquement)"
                                 value={newPseudoInput}
                                 onChange={(e) => setNewPseudoInput(e.target.value.slice(0, 32))}
                                 onKeyDown={(e) => e.key === 'Enter' && newPseudoInput.trim().length > 0 && handleCreateAccount()}
@@ -715,7 +715,7 @@ export default function Home() {
                             </button>
                         </div>
                         <p className="text-[11px] text-slate-500 ml-1">
-                            Multiple accounts can share the same pseudo — the #tag keeps them unique.
+                            Plusieurs comptes peuvent partager le même pseudo — le #tag les rend uniques.
                         </p>
                     </div>
                 </motion.div>
@@ -729,7 +729,7 @@ export default function Home() {
                                 <User className="w-4 h-4 text-cyan-accent" />
                             </div>
                             <div className="min-w-0">
-                                <div className="text-[10px] text-slate-400 uppercase tracking-widest">Connected as</div>
+                                <div className="text-[10px] text-slate-400 uppercase tracking-widest">Connecté en tant que</div>
                                 <div className="font-bold text-white truncate">
                                     {activeAccount.pseudo}
                                     <span className="font-mono text-slate-400 text-sm ml-0.5">#{activeAccount.tag}</span>
@@ -755,7 +755,7 @@ export default function Home() {
                                 <Play className="w-4 h-4 text-violet-accent" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <div className="text-sm font-bold text-white">Game in progress</div>
+                                <div className="text-sm font-bold text-white">Partie en cours</div>
                                 <div className="text-xs text-slate-300/80">
                                     <span className={activeAccountInfo.gameMode === 'hardcore' ? 'text-violet-accent font-bold' : 'text-cyan-accent font-bold'}>
                                         {activeAccountInfo.gameMode === 'hardcore' ? 'INFINITE' : 'CLASSIC'}
@@ -790,7 +790,7 @@ export default function Home() {
                             <Activity className="w-7 h-7 text-cyan-accent drop-shadow-[0_0_8px_rgba(56,189,248,0.6)]" />
                             <span className="text-2xl font-bold text-white tracking-wide">CLASSIC MODE</span>
                         </div>
-                        <span className="text-slate-300/70 text-sm relative z-10">Standard Minesweeper experience.</span>
+                        <span className="text-slate-300/70 text-sm relative z-10">Expérience Démineur classique.</span>
                     </button>
 
                     {/* INFINITE MODE */}
@@ -802,14 +802,14 @@ export default function Home() {
                             <Zap className="w-7 h-7 text-amber-accent animate-pulse drop-shadow-[0_0_8px_rgba(252,211,77,0.6)]" />
                             <span className="text-2xl font-bold text-white tracking-wide">INFINITE MODE</span>
                         </div>
-                        <span className="text-slate-300/70 text-sm relative z-10">Uncertainty &amp; Ambiguous numbers.</span>
+                        <span className="text-slate-300/70 text-sm relative z-10">Incertitude &amp; Chiffres ambigus.</span>
                     </button>
 
                     {/* JOIN ROOM */}
                     <div className="flex gap-2 w-full mt-6">
                         <input
                             type="text"
-                            placeholder="Have a code? Enter Room ID"
+                            placeholder="Vous avez un code ? Entrez l'ID de la salle"
                             className="flex-1 px-4 py-3 rounded-2xl text-white focus:outline-none focus:border-cyan-300/60 focus:shadow-[0_0_20px_rgba(56,189,248,0.25)] transition-all placeholder:text-slate-500 glass uppercase"
                             onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                         />
@@ -835,12 +835,12 @@ export default function Home() {
                                 : <Zap className="text-violet-accent drop-shadow-[0_0_8px_rgba(167,139,250,0.6)]"/>}
                             Setup Game
                         </h2>
-                        <button onClick={() => setSetupMode(null)} className="text-slate-400 hover:text-white text-sm hover:underline">Cancel</button>
+                        <button onClick={() => setSetupMode(null)} className="text-slate-400 hover:text-white text-sm hover:underline">Annuler</button>
                     </div>
 
                     {/* Difficulty */}
                     <div className="space-y-3">
-                        <label className="text-slate-300/70 text-xs font-semibold uppercase tracking-[0.15em]">Difficulty</label>
+                        <label className="text-slate-300/70 text-xs font-semibold uppercase tracking-[0.15em]">Difficulté</label>
                         <div className="grid grid-cols-5 gap-2">
                             {['easy', 'medium', 'hard', 'hardcore', 'custom'].map((d) => (
                                 <button
@@ -1115,7 +1115,7 @@ export default function Home() {
 
       <div className="fixed bottom-4 right-4 text-xs text-slate-500 flex items-center gap-2 glass px-3 py-1.5 rounded-full">
          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
-         Server: Connected
+         Serveur : Connecté
       </div>
 
        {/* GAME OVER OVERLAY */}
@@ -1133,27 +1133,27 @@ export default function Home() {
                         className="glass-strong glass-tint-coral p-8 rounded-3xl max-w-md w-full text-center"
                         style={{ boxShadow: '0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px -10px rgba(251,113,133,0.45)' }}
                     >
-                        <h2 className="text-5xl font-black text-rose-300 mb-2 drop-shadow-[0_0_15px_rgba(251,113,133,0.5)]">CRITICAL FAILURE</h2>
-                        <p className="text-slate-300 mb-8 text-lg">You Failed! (looser)</p>
+                        <h2 className="text-5xl font-black text-rose-300 mb-2 drop-shadow-[0_0_15px_rgba(251,113,133,0.5)]">ÉCHEC CRITIQUE</h2>
+                        <p className="text-slate-300 mb-8 text-lg">Vous avez échoué ! (perdant)</p>
 
                         <div className="flex flex-col gap-3">
                             <button
                                 onClick={restartGame}
                                 className="w-full py-4 bg-gradient-to-r from-rose-400 to-pink-400 text-slate-950 font-black text-xl transition-all rounded-2xl shadow-[0_10px_40px_-10px_rgba(251,113,133,0.6)] hover:brightness-110 active:scale-[0.98]"
                             >
-                                RETRY
+                                RÉESSAYER
                             </button>
                             <button
                                 onClick={() => setShowGameOverModal(false)}
                                 className="w-full py-4 glass glass-sheen text-white font-bold text-xl transition-colors rounded-2xl hover:bg-white/10"
                             >
-                                VIEW BOARD
+                                VOIR LE PLATEAU
                             </button>
                             <button
                                 onClick={leaveRoom}
                                 className="w-full py-4 glass-soft text-slate-200 font-black text-xl hover:bg-white/10 transition-colors rounded-2xl"
                             >
-                                RETURN TO HOME
+                                RETOUR À L'ACCUEIL
                             </button>
                         </div>
                     </motion.div>
@@ -1168,12 +1168,12 @@ export default function Home() {
                 >
                     <div className="max-w-7xl mx-auto flex justify-between items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
-                             <span className="text-rose-300 font-bold text-xl drop-shadow-[0_0_8px_rgba(251,113,133,0.5)]">GAME OVER</span>
+                             <span className="text-rose-300 font-bold text-xl drop-shadow-[0_0_8px_rgba(251,113,133,0.5)]">PARTIE TERMINÉE</span>
                              <button
                                 onClick={() => setShowGameOverModal(true)}
                                 className="text-sm text-slate-400 hover:text-white underline ml-2"
                              >
-                                Show Menu
+                                Voir le menu
                              </button>
                         </div>
 
@@ -1183,7 +1183,7 @@ export default function Home() {
                                     onClick={restartGame}
                                     className="px-6 py-2 bg-gradient-to-r from-rose-400 to-pink-400 text-slate-950 font-bold rounded-xl shadow-[0_0_18px_rgba(251,113,133,0.4)] hover:brightness-110 transition-all"
                                 >
-                                    RETRY
+                                    RÉESSAYER
                                 </button>
                             )}
                             <button
@@ -1211,8 +1211,8 @@ export default function Home() {
                         className="glass-strong glass-tint-mint p-8 rounded-3xl max-w-md w-full text-center"
                         style={{ boxShadow: '0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px -10px rgba(52,211,153,0.45)' }}
                     >
-                        <h2 className="text-5xl font-black text-mint-accent mb-2 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Nice Bravo!</h2>
-                        <p className="text-slate-300 mb-8 text-lg">Sector Cleared Successfully!</p>
+                        <h2 className="text-5xl font-black text-mint-accent mb-2 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Bravo !</h2>
+                        <p className="text-slate-300 mb-8 text-lg">Secteur dégagé avec succès !</p>
 
                         <div className="flex flex-col gap-3">
                             <button

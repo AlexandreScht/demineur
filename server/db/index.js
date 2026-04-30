@@ -9,15 +9,11 @@ const client = new Client({
 
 const db = drizzle(client, { schema });
 
-// Called once at startup — connect then run pending migrations
-async function connectAndMigrate() {
+// Called once at startup — connect to the database only.
+// Run migrations manually via: pnpm db:migrate
+async function connect() {
     await client.connect();
     console.log('Connected to PostgreSQL database');
-
-    const { migrate } = require('drizzle-orm/node-postgres/migrator');
-    const path = require('path');
-    await migrate(db, { migrationsFolder: path.join(__dirname, '..', 'drizzle') });
-    console.log('Migrations applied');
 }
 
-module.exports = { db, connectAndMigrate };
+module.exports = { db, connect };
