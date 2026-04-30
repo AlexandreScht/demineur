@@ -486,78 +486,88 @@ export default function Home() {
 
 
   // Top-right corner: combined notification stack (friend + join requests)
-  const notificationCorner = activeAccount && (incomingFriendRequests.length > 0 || incomingRequests.length > 0) ? (
-    <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 max-w-[320px] w-[min(320px,calc(100vw-2rem))]">
-        <AnimatePresence>
-            {incomingFriendRequests.map((req) => (
-                <motion.div
-                    key={`fr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
-                    initial={{ opacity: 0, x: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 20, scale: 0.95 }}
-                    className="glass-strong glass-tint-cyan rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(56,189,248,0.5)] border border-cyan-300/25"
-                >
-                    <div className="p-2 rounded-lg bg-cyan-400/15 border border-cyan-300/25 shrink-0">
-                        <UserPlus className="w-4 h-4 text-cyan-accent" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande d&apos;ami</div>
-                        <div className="text-sm font-bold text-white truncate">
-                            {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => acceptFriendRequest(req)}
-                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
-                        title="Accepter"
-                    >
-                        <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                        onClick={() => declineFriendRequest(req)}
-                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-                        title="Refuser"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                </motion.div>
-            ))}
-            {incomingRequests.map((req) => (
-                <motion.div
-                    key={`jr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
-                    initial={{ opacity: 0, x: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: 20, scale: 0.95 }}
-                    className="glass-strong glass-tint-violet rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)] border border-violet-300/25"
-                >
-                    <div className="p-2 rounded-lg bg-violet-400/15 border border-violet-300/25 shrink-0">
-                        <MailPlus className="w-4 h-4 text-violet-accent" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande de rejoindre</div>
-                        <div className="text-sm font-bold text-white truncate">
-                            {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => acceptJoinRequest(req)}
-                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
-                        title="Accepter"
-                    >
-                        <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                        onClick={() => declineJoinRequest(req)}
-                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-                        title="Refuser"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
-                </motion.div>
-            ))}
-        </AnimatePresence>
-    </div>
-  ) : null;
+  const renderNotificationCorner = (inGame: boolean) => {
+    if (!activeAccount || (incomingFriendRequests.length === 0 && incomingRequests.length === 0)) return null;
+    const positionClass = inGame ? "fixed top-[84px] right-4 z-[60]" : "fixed top-4 right-4 z-[60]";
+    const friendCardClass = inGame
+      ? "glass-strong glass-tint-cyan rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(56,189,248,0.5)] border border-cyan-300/25"
+      : "bg-slate-900 rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(56,189,248,0.5)] border border-cyan-300/25";
+    const joinCardClass = inGame
+      ? "glass-strong glass-tint-violet rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)] border border-violet-300/25"
+      : "bg-slate-900 rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)] border border-violet-300/25";
+    return (
+      <div className={`${positionClass} flex flex-col gap-2 max-w-[320px] w-[min(320px,calc(100vw-2rem))]`}>
+          <AnimatePresence>
+              {incomingFriendRequests.map((req) => (
+                  <motion.div
+                      key={`fr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
+                      initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                      className={friendCardClass}
+                  >
+                      <div className="p-2 rounded-lg bg-cyan-400/15 border border-cyan-300/25 shrink-0">
+                          <UserPlus className="w-4 h-4 text-cyan-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande d&apos;ami</div>
+                          <div className="text-sm font-bold text-white truncate">
+                              {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
+                          </div>
+                      </div>
+                      <button
+                          onClick={() => acceptFriendRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
+                          title="Accepter"
+                      >
+                          <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                          onClick={() => declineFriendRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                          title="Refuser"
+                      >
+                          <X className="w-3.5 h-3.5" />
+                      </button>
+                  </motion.div>
+              ))}
+              {incomingRequests.map((req) => (
+                  <motion.div
+                      key={`jr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
+                      initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                      className={joinCardClass}
+                  >
+                      <div className="p-2 rounded-lg bg-violet-400/15 border border-violet-300/25 shrink-0">
+                          <MailPlus className="w-4 h-4 text-violet-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande de rejoindre</div>
+                          <div className="text-sm font-bold text-white truncate">
+                              {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
+                          </div>
+                      </div>
+                      <button
+                          onClick={() => acceptJoinRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
+                          title="Accepter"
+                      >
+                          <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                          onClick={() => declineJoinRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                          title="Refuser"
+                      >
+                          <X className="w-3.5 h-3.5" />
+                      </button>
+                  </motion.div>
+              ))}
+          </AnimatePresence>
+      </div>
+    );
+  };
 
   // In-game only: floating social button + drawer
   const inGameSocialUI = activeAccount ? (
@@ -974,7 +984,7 @@ export default function Home() {
                 />
             </aside>
         )}
-        {notificationCorner}
+        {renderNotificationCorner(false)}
       </main>
     );
   }
@@ -1276,7 +1286,7 @@ export default function Home() {
             )}
        </AnimatePresence>
        {inGameSocialUI}
-       {notificationCorner}
+       {renderNotificationCorner(true)}
     </GameContainer>
   );
 }
