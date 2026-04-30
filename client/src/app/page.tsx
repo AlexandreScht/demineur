@@ -100,6 +100,7 @@ export default function Home() {
   // === Social ===
   const [socialOpen, setSocialOpen] = useState(false);
   const [incomingRequests, setIncomingRequests] = useState<IncomingJoinRequest[]>([]);
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<IncomingFriendRequest[]>([]);
 
   const handleCopyRoomId = () => {
       navigator.clipboard.writeText(roomId);
@@ -272,6 +273,14 @@ export default function Home() {
         setRoomId(roomId);
     }
 
+    function onFriendRequestReceived({ fromPseudo, fromTag, ts }: { fromPseudo: string; fromTag: string; ts?: number }) {
+        const receivedAt = ts || Date.now();
+        setIncomingFriendRequests(prev => {
+            const filtered = prev.filter(r => !(r.fromPseudo === fromPseudo && r.fromTag === fromTag));
+            return [...filtered, { fromPseudo, fromTag, receivedAt }];
+        });
+    }
+
     socket.on('room_created', onRoomCreated);
     socket.on('init_game', onInitGame);
     socket.on('update_grid', onUpdateGrid);
@@ -286,6 +295,7 @@ export default function Home() {
     socket.on('account_error', onAccountError);
     socket.on('join_request', onJoinRequest);
     socket.on('join_request_accepted', onJoinRequestAccepted);
+    socket.on('friend_request_received', onFriendRequestReceived);
 
     return () => {
       socket.off('room_created', onRoomCreated);
@@ -302,6 +312,7 @@ export default function Home() {
       socket.off('account_error', onAccountError);
       socket.off('join_request', onJoinRequest);
       socket.off('join_request_accepted', onJoinRequestAccepted);
+      socket.off('friend_request_received', onFriendRequestReceived);
       socket.disconnect();
     };
   }, []);
@@ -335,6 +346,14 @@ export default function Home() {
   const declineJoinRequest = (req: IncomingJoinRequest) => {
       socket.emit('decline_join_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
       setIncomingRequests(prev => prev.filter(r => r !== req));
+  };
+  const acceptFriendRequest = (req: IncomingFriendRequest) => {
+      socket.emit('accept_friend_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
+      setIncomingFriendRequests(prev => prev.filter(r => r !== req));
+  };
+  const declineFriendRequest = (req: IncomingFriendRequest) => {
+      socket.emit('decline_friend_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
+      setIncomingFriendRequests(prev => prev.filter(r => r !== req));
   };
 
 
@@ -466,7 +485,81 @@ export default function Home() {
 
 
 
-  // In-game only: floating button + drawer (incoming requests stay as overlay)
+  // Top-right corner: combined notification stack (friend + join requests)
+  const notificationCorner = activeAccount && (incomingFriendRequests.length > 0 || incomingRequests.length > 0) ? (
+    <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 max-w-[320px] w-[min(320px,calc(100vw-2rem))]">
+        <AnimatePresence>
+            {incomingFriendRequests.map((req) => (
+                <motion.div
+                    key={`fr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
+                    initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                    className="glass-strong glass-tint-cyan rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(56,189,248,0.5)] border border-cyan-300/25"
+                >
+                    <div className="p-2 rounded-lg bg-cyan-400/15 border border-cyan-300/25 shrink-0">
+                        <UserPlus className="w-4 h-4 text-cyan-accent" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Friend request</div>
+                        <div className="text-sm font-bold text-white truncate">
+                            {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => acceptFriendRequest(req)}
+                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
+                        title="Accept"
+                    >
+                        <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => declineFriendRequest(req)}
+                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                        title="Decline"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </motion.div>
+            ))}
+            {incomingRequests.map((req) => (
+                <motion.div
+                    key={`jr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
+                    initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                    className="glass-strong glass-tint-violet rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)] border border-violet-300/25"
+                >
+                    <div className="p-2 rounded-lg bg-violet-400/15 border border-violet-300/25 shrink-0">
+                        <MailPlus className="w-4 h-4 text-violet-accent" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Join request</div>
+                        <div className="text-sm font-bold text-white truncate">
+                            {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => acceptJoinRequest(req)}
+                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
+                        title="Accept"
+                    >
+                        <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => declineJoinRequest(req)}
+                        className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                        title="Decline"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                </motion.div>
+            ))}
+        </AnimatePresence>
+    </div>
+  ) : null;
+
+  // In-game only: floating social button + drawer
   const inGameSocialUI = activeAccount ? (
     <>
         <button
@@ -475,50 +568,20 @@ export default function Home() {
             title="Social"
         >
             <Users className="w-5 h-5 text-cyan-accent" />
-            {incomingRequests.length > 0 && (
+            {(incomingRequests.length + incomingFriendRequests.length) > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-gradient-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
-                    {incomingRequests.length}
+                    {incomingRequests.length + incomingFriendRequests.length}
                 </span>
             )}
         </button>
 
-        <div className="fixed bottom-20 left-4 z-40 flex flex-col gap-2 max-w-[300px]">
-            <AnimatePresence>
-                {incomingRequests.map((req) => (
-                    <motion.div
-                        key={`${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
-                        initial={{ opacity: 0, x: -20, scale: 0.95 }}
-                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                        exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                        className="glass-strong glass-tint-violet rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)]"
-                    >
-                        <div className="p-2 rounded-lg bg-violet-400/15 border border-violet-300/25 shrink-0">
-                            <MailPlus className="w-4 h-4 text-violet-accent" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Join request</div>
-                            <div className="text-sm font-bold text-white truncate">
-                                {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => acceptJoinRequest(req)}
-                            className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
-                        >
-                            <Check className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                            onClick={() => declineJoinRequest(req)}
-                            className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    </motion.div>
-                ))}
-            </AnimatePresence>
-        </div>
-
-        <SocialDrawer isOpen={socialOpen} onClose={() => setSocialOpen(false)} variant="drawer" />
+        <SocialDrawer
+            isOpen={socialOpen}
+            onClose={() => setSocialOpen(false)}
+            variant="drawer"
+            activePseudo={activeAccount.pseudo}
+            activeTag={activeAccount.tag}
+        />
     </>
   ) : null;
 
@@ -906,12 +969,12 @@ export default function Home() {
                 <SocialDrawer
                     isOpen={true}
                     variant="panel"
-                    incomingRequests={incomingRequests}
-                    onAcceptRequest={acceptJoinRequest}
-                    onDeclineRequest={declineJoinRequest}
+                    activePseudo={activeAccount.pseudo}
+                    activeTag={activeAccount.tag}
                 />
             </aside>
         )}
+        {notificationCorner}
       </main>
     );
   }
@@ -1213,6 +1276,7 @@ export default function Home() {
             )}
        </AnimatePresence>
        {inGameSocialUI}
+       {notificationCorner}
     </GameContainer>
   );
 }
