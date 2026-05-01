@@ -87,7 +87,7 @@ jobs:
     needs: [build_client, build_server]
     runs-on: ubuntu-latest
     environment: Production
-    if: github.event_name != 'schedule'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     services:
       postgres:
@@ -154,7 +154,7 @@ jobs:
     needs: [deploy_server]
     runs-on: ubuntu-latest
     environment: Production
-    if: github.event_name != 'schedule'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Vercel Deploy Hook
         env:
