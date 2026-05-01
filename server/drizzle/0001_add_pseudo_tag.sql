@@ -16,4 +16,10 @@ ALTER TABLE "users" ALTER COLUMN "tag" SET NOT NULL;
 ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "users_pseudo_unique";
 
 -- Composite unique on (pseudo, tag) ensures full identifier is unique
-ALTER TABLE "users" ADD CONSTRAINT "users_pseudo_tag_unique" UNIQUE ("pseudo", "tag");
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'users_pseudo_tag_unique'
+  ) THEN
+    ALTER TABLE "users" ADD CONSTRAINT "users_pseudo_tag_unique" UNIQUE ("pseudo", "tag");
+  END IF;
+END $$;
