@@ -86,7 +86,6 @@ jobs:
   deploy_server:
     name: Test Migration & Deploy
     needs: [build_client, build_server]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: Production
 
