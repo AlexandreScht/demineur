@@ -8,6 +8,8 @@ const users = pgTable('users', {
   gameMode: varchar('game_mode', { length: 32 }),
   gameDifficulty: varchar('game_difficulty', { length: 32 }),
   gameLevel: integer('game_level'),
+  fingerprintHash: varchar('fingerprint_hash', { length: 64 }),
+  localStorageToken: varchar('local_storage_token', { length: 64 }),
   lastActive: timestamp('last_active').defaultNow(),
 }, (table) => [
   unique('users_pseudo_tag_unique').on(table.pseudo, table.tag),

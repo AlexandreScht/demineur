@@ -22,6 +22,13 @@
       "when": 1798747300000,
       "tag": "0002_add_friendships",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1746094800000,
+      "tag": "0003_add_fingerprint",
+      "breakpoints": true
     }
   ]
 }

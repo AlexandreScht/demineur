@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const MinesweeperGame = require('./gameLogic');
 const { db, connect } = require('./db');
 const { users, friendships } = require('./db/schema');
-const { eq, lt, and, isNotNull } = require('drizzle-orm');
+const { eq, lt, and, isNotNull, or } = require('drizzle-orm');
 
 const app = express();
 app.use(cors());
@@ -205,12 +205,75 @@ setInterval(cleanupOldGames, 24 * 60 * 60 * 1000);
 
 io.on('connection', (socket) => {
 
+  // === Identify a returning visitor by localStorage token + fingerprint hash ===
+  socket.on('identify_visitor', async ({ localStorageToken, fingerprintHash }) => {
+      const token = typeof localStorageToken === 'string' ? localStorageToken.slice(0, 64) : null;
+      const hash  = typeof fingerprintHash  === 'string' ? fingerprintHash.slice(0, 64)  : null;
+      if (!token && !hash) return socket.emit('visitor_identified', { accounts: [] });
+
+      try {
+          const byToken = token
+              ? await db.select({ pseudo: users.pseudo, tag: users.tag }).from(users)
+                    .where(eq(users.localStorageToken, token))
+              : [];
+
+          const byHash = hash
+              ? await db.select({ pseudo: users.pseudo, tag: users.tag }).from(users)
+                    .where(eq(users.fingerprintHash, hash))
+              : [];
+
+          const seen = new Set();
+          const found = [];
+          for (const acc of [...byToken, ...byHash]) {
+              const key = accKey(acc.pseudo, acc.tag);
+              if (!seen.has(key)) {
+                  seen.add(key);
+                  found.push({ pseudo: acc.pseudo, tag: acc.tag });
+              }
+          }
+          socket.emit('visitor_identified', { accounts: found });
+      } catch (err) {
+          console.error('identify_visitor error:', err);
+          socket.emit('visitor_identified', { accounts: [] });
+      }
+  });
+
+  // === Update fingerprint/token when a returning visitor selects an account ===
+  socket.on('update_visitor_identity', async ({ pseudo, tag, fingerprintHash, localStorageToken }) => {
+      if (!isValidAccount({ pseudo, tag })) return;
+      const hash  = typeof fingerprintHash  === 'string' ? fingerprintHash.slice(0, 64)  : null;
+      const token = typeof localStorageToken === 'string' ? localStorageToken.slice(0, 64) : null;
+      if (!hash && !token) return;
+
+      try {
+          const rows = await db.select({ id: users.id, fingerprintHash: users.fingerprintHash, localStorageToken: users.localStorageToken })
+              .from(users)
+              .where(and(eq(users.pseudo, pseudo), eq(users.tag, tag)))
+              .limit(1);
+          if (rows.length === 0) return;
+
+          const current = rows[0];
+          const updates = {};
+          if (hash  && current.fingerprintHash  !== hash)  updates.fingerprintHash  = hash;
+          if (token && current.localStorageToken !== token) updates.localStorageToken = token;
+          if (Object.keys(updates).length > 0) {
+              updates.lastActive = new Date();
+              await db.update(users).set(updates)
+                  .where(and(eq(users.pseudo, pseudo), eq(users.tag, tag)));
+          }
+      } catch (err) {
+          console.error('update_visitor_identity error:', err);
+      }
+  });
+
   // === Create a brand-new account: pseudo provided, tag generated server-side ===
-  socket.on('create_account', async ({ pseudo }) => {
+  socket.on('create_account', async ({ pseudo, fingerprintHash, localStorageToken }) => {
       const cleanPseudo = sanitizePseudo(pseudo);
       if (!cleanPseudo) {
           return socket.emit('account_error', { reason: 'Pseudo cannot be empty' });
       }
+      const hash  = typeof fingerprintHash  === 'string' ? fingerprintHash.slice(0, 64)  : null;
+      const token = typeof localStorageToken === 'string' ? localStorageToken.slice(0, 64) : null;
 
       // Try a few tags until we find one that doesn't collide
       for (let attempt = 0; attempt < 10; attempt++) {
@@ -219,6 +282,8 @@ io.on('connection', (socket) => {
               await db.insert(users).values({
                   pseudo: cleanPseudo,
                   tag,
+                  fingerprintHash: hash,
+                  localStorageToken: token,
                   lastActive: new Date()
               });
               return socket.emit('account_created', { pseudo: cleanPseudo, tag });

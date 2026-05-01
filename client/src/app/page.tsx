@@ -9,10 +9,12 @@ import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
 import RangeSlider from '@/components/ui/RangeSlider';
 import SocialDrawer from '@/components/SocialDrawer';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, Crosshair, MessageCircle } from 'lucide-react';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, Crosshair, MessageCircle, Clock } from 'lucide-react';
+import { getLightFingerprint } from '@/utils/fingerprint';
 
 const ACCOUNTS_KEY = 'minesweeper_accounts';
 const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
+const VISITOR_TOKEN_KEY = 'minesweeper_visitor_token';
 
 function readAccountsFromStorage(): Account[] {
     if (typeof window === 'undefined') return [];
@@ -102,6 +104,8 @@ export default function Home() {
   const [newPseudoInput, setNewPseudoInput] = useState('');
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [accountsHydrated, setAccountsHydrated] = useState(false);
+  const [suggestedAccounts, setSuggestedAccounts] = useState<Account[]>([]);
+  const [visitorIdentity, setVisitorIdentity] = useState<{ token: string; hash: string } | null>(null);
 
   // === Social ===
   const [socialOpen, setSocialOpen] = useState(false);
