@@ -1,18 +1,150 @@
-name: App CI/CD & Keep Alive
+name: CI/CD Pipeline
 
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
+
 jobs:
   # ------------------------------------------------------------------
-  # JOB 2: DEPLOY SERVER (Runs on Push to Main)
+  # CI: CLIENT (Next.js)
   # ------------------------------------------------------------------
-  deploy_server:
-    name: Deploy Server (Render)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+  build_client:
+    name: Build & Check Client
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.29.3
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies (Client)
+        working-directory: ./client
+        run: pnpm install
+
+      - name: Lint Client
+        working-directory: ./client
+        run: pnpm run lint
+
+      - name: Build Client
+        working-directory: ./client
+        run: pnpm run build
+
+  # ------------------------------------------------------------------
+  # CI: SERVER (Node.js)
+  # ------------------------------------------------------------------
+  build_server:
+    name: Check Server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.29.3
+          run_install: false
+
+      - name: Install dependencies (Server)
+        working-directory: ./server
+        run: pnpm install
+
+      # Add testing script here if you implement tests in the future
+      # - name: Test Server
+      #   working-directory: ./server
+      #   run: pnpm test
+
+  # ------------------------------------------------------------------
+  # CD: TEST DB MIGRATION & DEPLOY SERVER (Render)
+  # ------------------------------------------------------------------
+  deploy_server:
+    name: Test Migration & Deploy
+    needs: [build_client, build_server]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: Production
+
+    # Création d'une base de données PostgreSQL locale éphémère
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.29.3
+          run_install: false
+
+      - name: Install dependencies (Server)
+        working-directory: ./server
+        run: pnpm install
+
+      - name: Clone Prod DB (pg_dump)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pg_dump "$DATABASE_URL" -O -x -c > prod_clone.sql
+
+      - name: Restore to Local DB
+        env:
+          LOCAL_DB_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
+        run: psql "$LOCAL_DB_URL" < prod_clone.sql
+
+      - name: Test Database Migration
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
+        run: pnpm run db:migrate
+
       - name: Trigger Render Deploy Hook
         env:
           deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK }}
