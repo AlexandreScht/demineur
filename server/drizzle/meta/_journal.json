@@ -8,6 +8,20 @@
       "when": 1767048500286,
       "tag": "0000_sleepy_vance_astro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1798747200000,
+      "tag": "0001_add_pseudo_tag",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1798747300000,
+      "tag": "0002_add_friendships",
+      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,149 @@
-name: App CI/CD & Keep Alive
+name: CI/CD Pipeline
 
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
+
 jobs:
   # ------------------------------------------------------------------
-  # JOB 2: DEPLOY SERVER (Runs on Push to Main)
+  # CI: CLIENT (Next.js)
+  # ------------------------------------------------------------------
+  build_client:
+    name: Build & Check Client
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.29.3
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies (Client)
+        working-directory: ./client
+        run: pnpm install
+
+      - name: Build Client
+        working-directory: ./client
+        run: pnpm run build
+
+  # ------------------------------------------------------------------
+  # CI: SERVER (Node.js)
+  # ------------------------------------------------------------------
+  build_server:
+    name: Check Server
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.29.3
+          run_install: false
+
+      - name: Install dependencies (Server)
+        working-directory: ./server
+        run: pnpm install
+
+  # ------------------------------------------------------------------
+  # CD: TEST DB MIGRATION — sur main uniquement
+  # ------------------------------------------------------------------
+  test_migration:
+    name: Test Database Migration
+    needs: [build_client, build_server]
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10.29.3
+          run_install: false
+
+      - name: Install dependencies (Server)
+        working-directory: ./server
+        run: pnpm install
+
+      - name: Create Schema on Ephemeral DB (current prod state)
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
+        run: pnpm run db:push
+
+      - name: Test Database Migration (new changes)
+        working-directory: ./server
+        env:
+          DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
+        run: pnpm run db:migrate
+
+  # ------------------------------------------------------------------
+  # CD: DEPLOY SERVER (Render) — uniquement si migration réussie
   # ------------------------------------------------------------------
   deploy_server:
-    name: Deploy Server (Render)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Deploy Server to Render
+    needs: [test_migration]
     runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Render Deploy Hook
         env:
@@ -22,4 +154,75 @@ jobs:
             exit 0
           fi
           curl -X POST "$deploy_url"
-          echo "Render deploy triggered successfully."
+          echo "✅ Render deploy triggered successfully."
+
+  # ------------------------------------------------------------------
+  # CD: DEPLOY CLIENT (Vercel) — uniquement si server deploy réussi
+  # ------------------------------------------------------------------
+  deploy_client:
+    name: Deploy Client to Vercel
+    needs: [deploy_server]
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Vercel Deploy Hook
+        env:
+          deploy_url: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$deploy_url" ]; then
+            echo "VERCEL_DEPLOY_HOOK secret not set. Skipping deploy."
+            exit 0
+          fi
+          curl -X POST "$deploy_url"
+          echo "✅ Vercel deploy triggered successfully."
+
+  # ------------------------------------------------------------------
+  # KEEP-ALIVE: Test Supabase connection then ping
+  # ------------------------------------------------------------------
+  test_supabase_connection:
+    name: Test Supabase Connection
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    outputs:
+      reachable: ${{ steps.check.outputs.reachable }}
+    steps:
+      - name: Check Supabase connectivity
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+
+          echo "HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Supabase is reachable"
+            echo "reachable=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Supabase returned status $HTTP_STATUS"
+            echo "reachable=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  keep_alive:
+    name: Keep Supabase Alive
+    needs: test_supabase_connection
+    runs-on: ubuntu-latest
+    environment: Production
+    if: needs.test_supabase_connection.outputs.reachable == 'true'
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -s "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+          echo "✅ Supabase pinged successfully"

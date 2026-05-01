@@ -1,14 +1,40 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { socket } from '@/utils/socket';
-import { GridData, CellData, GameInitData } from '@/utils/types';
+import { GridData, CellData, GameInitData, Account, AccountInfo, IncomingJoinRequest, IncomingFriendRequest } from '@/utils/types';
 import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
 import RangeSlider from '@/components/ui/RangeSlider';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Gamepad2, Settings } from 'lucide-react';
+import SocialDrawer from '@/components/SocialDrawer';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, Crosshair } from 'lucide-react';
+
+const ACCOUNTS_KEY = 'minesweeper_accounts';
+const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
+
+function readAccountsFromStorage(): Account[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const raw = localStorage.getItem(ACCOUNTS_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter(a => a && typeof a.pseudo === 'string' && typeof a.tag === 'string');
+    } catch {
+        return [];
+    }
+}
+
+function writeAccountsToStorage(accounts: Account[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+}
+
+function accountKey(a: Account) {
+    return `${a.pseudo}#${a.tag}`;
+}
 
 export default function Home() {
   const [inRoom, setInRoom] = useState(false);
@@ -16,7 +42,6 @@ export default function Home() {
   const [grid, setGrid] = useState<GridData>([]);
   const [transitionGrid, setTransitionGrid] = useState<GridData | null>(null);
   const [hp, setHp] = useState(3);
-  // ... (lines 18-128 omitted)
   const [isExploding, setIsExploding] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isGameWon, setIsGameWon] = useState(false);
@@ -27,44 +52,61 @@ export default function Home() {
   const [setupMode, setSetupMode] = useState<'classic' | 'hardcore' | null>(null);
   const [difficulty, setDifficulty] = useState('medium');
   const [customHp, setCustomHp] = useState(3);
-  
+
   // Custom Mode State
-  const [customGridStep, setCustomGridStep] = useState(0); // 0 to 18
-  const [customBombRate, setCustomBombRate] = useState(4.5); // 3.0 to 6.0
-  const [customScanners, setCustomScanners] = useState(1); // 0 to 10
+  const [customGridStep, setCustomGridStep] = useState(0);
+  const [customBombRate, setCustomBombRate] = useState(4.5);
+  const [customScanners, setCustomScanners] = useState(1);
   const [customAllowLying, setCustomAllowLying] = useState(false);
-  const [customLyingChance, setCustomLyingChance] = useState(12); // 10 to 25
-  
+  const [customLyingChance, setCustomLyingChance] = useState(12);
+
   const [minesCount, setMinesCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [score, setScore] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
-  
+
   // Scanner state
   const [scansAvailable, setScansAvailable] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
+
+  // Mobile flag-mode toggle (tap = flag instead of reveal)
+  const [flagMode, setFlagMode] = useState(false);
+
+  // Board ref for measuring
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [boardInnerH, setBoardInnerH] = useState(0);
+
+  // Mobile social drawer on home page
+  const [homeSocialOpen, setHomeSocialOpen] = useState(false);
 
   // Custom Helpers
   const { customRows, customCols, customMines } = useMemo(() => {
       const base = 8;
       const rowSteps = Math.floor(customGridStep / 2);
       const colSteps = Math.ceil(customGridStep / 2);
-      
+
       const rows = base + (rowSteps * 3);
       const cols = base + (colSteps * 3);
-      
+
       const totalCells = rows * cols;
       const mines = Math.floor(totalCells / customBombRate);
 
       return { customRows: rows, customCols: cols, customMines: mines };
   }, [customGridStep, customBombRate]);
 
-  // Recovery State
-  // Recovery State
-  const [pseudo, setPseudo] = useState('');
-  const [storedPseudo, setStoredPseudo] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(true);
+  // === Accounts (multi-pseudo, persistent in localStorage) ===
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsInfo, setAccountsInfo] = useState<AccountInfo[]>([]);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
+  const [newPseudoInput, setNewPseudoInput] = useState('');
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [accountsHydrated, setAccountsHydrated] = useState(false);
+
+  // === Social ===
+  const [socialOpen, setSocialOpen] = useState(false);
+  const [incomingRequests, setIncomingRequests] = useState<IncomingJoinRequest[]>([]);
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<IncomingFriendRequest[]>([]);
 
   const handleCopyRoomId = () => {
       navigator.clipboard.writeText(roomId);
@@ -83,21 +125,20 @@ export default function Home() {
       setHp(3);
       setIsGameOver(false);
       setScore(0);
-      sessionStorage.removeItem('minigame_roomId'); // Clear only on explicit leave
-      socket.emit('leave_room', roomId, pseudo);
-  }, [roomId, pseudo]);
-  
-  const joinRoom = useCallback((id: string) => {
+      socket.emit('leave_room', roomId, activeAccount?.pseudo, activeAccount?.tag);
+  }, [roomId, activeAccount]);
+
+  const joinRoom = useCallback((id: string, account?: Account | null) => {
+    const acc = account || activeAccount;
     setRoomId(id);
-    socket.emit('join_room', id, pseudo);
-  }, [pseudo]);
+    socket.emit('join_room', id, acc?.pseudo, acc?.tag);
+  }, [activeAccount]);
 
   useEffect(() => {
     socket.connect();
-    
+
     function onRoomCreated(id: string) {
       setRoomId(id);
-      setInRoom(true);
       setInRoom(true);
       setIsGameOver(false);
       setShowGameOverModal(false);
@@ -105,17 +146,16 @@ export default function Home() {
       setShowGameWinModal(false);
       setScore(0);
     }
-    // ... existing listeners ...
+
     const onInitGame = (data: GameInitData) => {
         setGrid(data.grid);
         setHp(data.hp);
         setInRoom(true);
-        setInRoom(true);
         setIsGameOver(false);
         setShowGameOverModal(false);
-        setMinesCount(data.mines); 
+        setMinesCount(data.mines);
         setScansAvailable(data.scansAvailable || 0);
-        setIsScanning(false); 
+        setIsScanning(false);
         if (data.role) setMyRole(data.role);
         if (data.mode) setSetupMode(data.mode as any);
         if (data.difficulty) setDifficulty(data.difficulty as any);
@@ -131,27 +171,25 @@ export default function Home() {
             return newGrid;
         });
     }
-    
+
     function onLevelComplete({ grid: newGrid, score: newScore, level: newLevel, mines, scansAvailable }: { grid: GridData, score: number, level?: number, mines: number, scansAvailable?: number }) {
         setGrid(currentGrid => {
-            // Construct merged grid for animation: Current + New (skipping first overlapped row)
             const merged = [...currentGrid, ...newGrid.slice(1)];
             setTransitionGrid(merged);
-            
-            // Set timeout to switch to new grid AFTER animation
-            setTimeout(() => {
-                setTransitionGrid(null); // Clear transition grid
-                setIsTransitioning(false); 
-            }, 2000); 
 
-            return newGrid; 
+            setTimeout(() => {
+                setTransitionGrid(null);
+                setIsTransitioning(false);
+            }, 2000);
+
+            return newGrid;
         });
-        
+
         setScore(newLevel ? newLevel - 1 : newScore);
         setMinesCount(mines);
         if (scansAvailable !== undefined) setScansAvailable(scansAvailable);
         setIsScanning(false);
-        setIsTransitioning(true); 
+        setIsTransitioning(true);
     }
 
     function onExplosion({ hp }: { x: number, y: number, hp: number }) {
@@ -167,7 +205,7 @@ export default function Home() {
             setGrid(prev => {
                 const newGrid = [...prev];
                 mines.forEach(mine => {
-                    newGrid[mine.y][mine.x] = { ...mine, isOpen: true }; // Force open visually
+                    newGrid[mine.y][mine.x] = { ...mine, isOpen: true };
                 });
                 return newGrid;
             });
@@ -177,17 +215,76 @@ export default function Home() {
     function onGameWin() {
         setIsGameWon(true);
         setShowGameWinModal(true);
-        // Maybe play sound?
     }
 
     function onUpdateMines({ mines }: { mines: number }) {
         setMinesCount(mines);
     }
-    
+
     function onUpdateScans({ scansAvailable }: { scansAvailable: number }) {
         setScansAvailable(scansAvailable);
-        // If no scans left, disable scanning mode
         if (scansAvailable <= 0) setIsScanning(false);
+    }
+
+    function onAccountsInfo(infos: AccountInfo[]) {
+        setAccountsInfo(infos || []);
+    }
+
+    function onAccountCreated({ pseudo, tag }: { pseudo: string; tag: string }) {
+        const newAcc: Account = { pseudo, tag };
+        setAccounts(prev => {
+            const exists = prev.some(a => accountKey(a) === accountKey(newAcc));
+            const next = exists ? prev : [...prev, newAcc];
+            writeAccountsToStorage(next);
+            return next;
+        });
+        setAccountsInfo(prev => [...prev.filter(i => accountKey(i) !== accountKey(newAcc)), {
+            ...newAcc,
+            currentRoomId: null,
+            gameMode: null,
+            gameDifficulty: null,
+            gameLevel: null,
+        }]);
+        setActiveAccount(newAcc);
+        localStorage.setItem(ACTIVE_ACCOUNT_KEY, JSON.stringify(newAcc));
+        setNewPseudoInput('');
+        setIsCreatingAccount(false);
+        toast.success(`Compte ${pseudo}#${tag} créé`);
+    }
+
+    function onAccountError({ reason }: { reason: string }) {
+        setIsCreatingAccount(false);
+        toast.error(reason || 'Erreur compte');
+    }
+
+    function onJoinRequest({ fromPseudo, fromTag, roomId, expiresInMs }: { fromPseudo: string; fromTag: string; roomId: string; expiresInMs?: number }) {
+        const ttl = expiresInMs || 60_000;
+        const now = Date.now();
+        setIncomingRequests(prev => {
+            // dedupe per sender
+            const filtered = prev.filter(r => !(r.fromPseudo === fromPseudo && r.fromTag === fromTag));
+            return [...filtered, { fromPseudo, fromTag, roomId, receivedAt: now, expiresAt: now + ttl }];
+        });
+    }
+
+    function onJoinRequestAccepted({ roomId }: { roomId: string }) {
+        toast.success('Demande acceptée, connexion en cours…');
+        const stored = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+        let acc: Account | null = null;
+        if (stored) {
+            try { acc = JSON.parse(stored); } catch {}
+        }
+        // Joining a new room replaces any current one
+        socket.emit('join_room', roomId, acc?.pseudo, acc?.tag);
+        setRoomId(roomId);
+    }
+
+    function onFriendRequestReceived({ fromPseudo, fromTag, ts }: { fromPseudo: string; fromTag: string; ts?: number }) {
+        const receivedAt = ts || Date.now();
+        setIncomingFriendRequests(prev => {
+            const filtered = prev.filter(r => !(r.fromPseudo === fromPseudo && r.fromTag === fromTag));
+            return [...filtered, { fromPseudo, fromTag, receivedAt }];
+        });
     }
 
     socket.on('room_created', onRoomCreated);
@@ -199,44 +296,12 @@ export default function Home() {
     socket.on('explosion', onExplosion);
     socket.on('game_over', onGameOver);
     socket.on('game_win', onGameWin);
-    socket.on('recovery_available', ({ roomId, mode, difficulty }: { roomId: string, mode: string, difficulty: string }) => {
-        toast.custom((t) => (
-            <div className="w-full flex flex-col gap-3 bg-slate-900/95 border border-blue-500/30 p-4 rounded-xl shadow-2xl shadow-blue-500/10 backdrop-blur-md relative overflow-hidden">
-                {/* Glow effect */}
-                <div className="absolute top-0 left-0 w-1 h-full bg-linear-to-b from-blue-500 to-purple-500" />
-                
-                <div className="flex items-start gap-3 pl-2">
-                    <div className="p-2 bg-blue-500/10 rounded-lg shrink-0 mt-0.5">
-                        <Gamepad2 className="w-5 h-5 text-blue-400 animate-pulse" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="font-bold text-white text-sm tracking-wide">SESSION FOUND</h3>
-                        <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
-                            Resuming <span className={`font-extrabold uppercase ${mode === 'hardcore' ? 'text-pink-300' : 'text-blue-400'}`}>
-                                {mode === 'hardcore' ? 'INFINITE' : 'CLASSIC'}
-                            </span> game on <span className="font-bold text-yellow-500 uppercase">{difficulty}</span> difficulty.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="flex gap-2 w-full pl-2 mt-1">
-                    <button 
-                        onClick={() => toast.dismiss(t)} 
-                        className="flex-1 py-2 text-xs font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                    >
-                        DISMISS
-                    </button>
-                    <button 
-                        onClick={() => { joinRoom(roomId); toast.dismiss(t); }} 
-                        className="flex-1 py-2 text-xs font-bold text-white bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 rounded-lg shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-                    >
-                        RESUME GAME
-                    </button>
-                </div>
-            </div>
-        ), { duration: Infinity });
-    });
-
+    socket.on('accounts_info', onAccountsInfo);
+    socket.on('account_created', onAccountCreated);
+    socket.on('account_error', onAccountError);
+    socket.on('join_request', onJoinRequest);
+    socket.on('join_request_accepted', onJoinRequestAccepted);
+    socket.on('friend_request_received', onFriendRequestReceived);
 
     return () => {
       socket.off('room_created', onRoomCreated);
@@ -248,28 +313,65 @@ export default function Home() {
       socket.off('explosion', onExplosion);
       socket.off('game_over', onGameOver);
       socket.off('game_win', onGameWin);
-      socket.off('recovery_available');
+      socket.off('accounts_info', onAccountsInfo);
+      socket.off('account_created', onAccountCreated);
+      socket.off('account_error', onAccountError);
+      socket.off('join_request', onJoinRequest);
+      socket.off('join_request_accepted', onJoinRequestAccepted);
+      socket.off('friend_request_received', onFriendRequestReceived);
       socket.disconnect();
     };
-  }, [joinRoom]);
+  }, []);
 
-
-
-  // Keep Session Storage in sync (Only Set, never Clear automatically)
+  // Register account with the server for presence + invite delivery
   useEffect(() => {
-      if (inRoom && roomId) {
-          sessionStorage.setItem('minigame_roomId', roomId);
-      }
-  }, [inRoom, roomId]);
+      if (!activeAccount) return;
+      const send = () => socket.emit('register_account', activeAccount);
+      if (socket.connected) send();
+      socket.on('connect', send);
+      return () => {
+          socket.off('connect', send);
+          socket.emit('unregister_account');
+      };
+  }, [activeAccount]);
+
+  // Auto-expire incoming requests
+  useEffect(() => {
+      if (incomingRequests.length === 0) return;
+      const interval = setInterval(() => {
+          const now = Date.now();
+          setIncomingRequests(prev => prev.filter(r => r.expiresAt > now));
+      }, 1000);
+      return () => clearInterval(interval);
+  }, [incomingRequests.length]);
+
+  const acceptJoinRequest = (req: IncomingJoinRequest) => {
+      socket.emit('accept_join_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
+      setIncomingRequests(prev => prev.filter(r => r !== req));
+  };
+  const declineJoinRequest = (req: IncomingJoinRequest) => {
+      socket.emit('decline_join_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
+      setIncomingRequests(prev => prev.filter(r => r !== req));
+  };
+  const acceptFriendRequest = (req: IncomingFriendRequest) => {
+      socket.emit('accept_friend_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
+      setIncomingFriendRequests(prev => prev.filter(r => r !== req));
+  };
+  const declineFriendRequest = (req: IncomingFriendRequest) => {
+      socket.emit('decline_friend_request', { fromPseudo: req.fromPseudo, fromTag: req.fromTag });
+      setIncomingFriendRequests(prev => prev.filter(r => r !== req));
+  };
+
+
 
   const startGame = () => {
-      if (!setupMode) return;
-      socket.emit('create_room', { 
-          mode: setupMode, 
-          difficulty, 
-          hp: customHp, 
-          pseudo,
-          // Custom params
+      if (!setupMode || !activeAccount) return;
+      socket.emit('create_room', {
+          mode: setupMode,
+          difficulty,
+          hp: customHp,
+          pseudo: activeAccount.pseudo,
+          tag: activeAccount.tag,
           rows: difficulty === 'custom' ? customRows : undefined,
           cols: difficulty === 'custom' ? customCols : undefined,
           mines: difficulty === 'custom' ? customMines : undefined,
@@ -281,12 +383,11 @@ export default function Home() {
 
   const restartGame = () => {
       if (!setupMode) return;
-      socket.emit('restart_game', { 
-          roomId, 
-          mode: setupMode, 
-          difficulty, 
+      socket.emit('restart_game', {
+          roomId,
+          mode: setupMode,
+          difficulty,
           hp: customHp,
-          // Custom params
           rows: difficulty === 'custom' ? customRows : undefined,
           cols: difficulty === 'custom' ? customCols : undefined,
           mines: difficulty === 'custom' ? customMines : undefined,
@@ -294,165 +395,447 @@ export default function Home() {
           allowLying: difficulty === 'custom' ? customAllowLying : undefined,
           lyingChance: difficulty === 'custom' ? customLyingChance : undefined
       });
-      setIsGameOver(false); 
-      setShowGameOverModal(false); 
+      setIsGameOver(false);
+      setShowGameOverModal(false);
       setIsGameWon(false);
       setShowGameWinModal(false);
   };
 
-  // Restore Pseudo State (Run once on mount)
-  // Restore Pseudo State (Run once on mount)
+  // Hydrate accounts from localStorage on mount
   useEffect(() => {
-      const sPseudo = sessionStorage.getItem('minigame_pseudo');
-      const sRoomId = sessionStorage.getItem('minigame_roomId');
-
-      if (sPseudo) {
-          setPseudo(sPseudo);
-          setStoredPseudo(sPseudo);
-          setIsEditing(false);
-
-          // Check for recovery if no local room but pseudo exists
-          if (!sRoomId) {
-             if (socket.connected) {
-                 socket.emit('check_recovery', sPseudo);
-             } else {
-                 socket.once('connect', () => {
-                     socket.emit('check_recovery', sPseudo);
-                 });
-             }
-          }
-      }
+      const stored = readAccountsFromStorage();
+      setAccounts(stored);
+      setAccountsHydrated(true);
   }, []);
 
-  // Auto-Join Effect
+  // Once hydrated (and socket is up), fetch live game info for those accounts
   useEffect(() => {
-      const sPseudo = sessionStorage.getItem('minigame_pseudo');
-      const sRoomId = sessionStorage.getItem('minigame_roomId');
-      
-
-      
-      if (sRoomId && !inRoom && socket.connected) {
-
-           setRoomId((prev) => (prev !== sRoomId ? sRoomId : prev)); 
-           socket.emit('join_room', sRoomId, sPseudo || ""); // Pseudo optional
-      } else if (sRoomId && !inRoom) {
-          socket.once('connect', () => {
-              setRoomId(sRoomId); 
-              socket.emit('join_room', sRoomId, sPseudo || "");
-          });
-      }
-  }, [inRoom]);
-
-  const handleLogin = () => {
-      // 1. MODIFY STATE: User wants to edit
-      if (!isEditing) {
-          setIsEditing(true);
+      if (!accountsHydrated) return;
+      if (accounts.length === 0) {
+          setAccountsInfo([]);
           return;
       }
-
-      // 2. CANCEL STATE: User cancels editing (revert to stored)
-      if (storedPseudo && pseudo === storedPseudo) {
-          setIsEditing(false);
-          return;
+      const send = () => socket.emit('fetch_accounts_info', accounts);
+      if (socket.connected) {
+          send();
+      } else {
+          socket.once('connect', send);
       }
-      
-      // 3. LOGIN STATE: User submits new pseudo
-      if(pseudo.length > 0) {
-          sessionStorage.setItem('minigame_pseudo', pseudo);
-          setStoredPseudo(pseudo);
-          setIsEditing(false);
-          socket.emit('check_recovery', pseudo);
+  }, [accountsHydrated, accounts]);
+
+  // Measure actual board height from the container width so there's never empty space
+  useEffect(() => {
+    if (!boardRef.current || !inRoom) return;
+    const GAP_X = 4; // matches gap-x-1 in Grid.tsx
+    const GAP_Y = 4; // matches gap-y-[4px] in Grid.tsx
+
+    const measure = () => {
+      if (!boardRef.current) return;
+      const cols = grid[0]?.length || 0;
+      const rows = grid.length;
+      if (!cols || !rows) return;
+      const isMobile = window.innerWidth < 768;
+      const pad = isMobile ? 12 : 40; // p-1.5 vs p-5
+      const gapX = isMobile ? 2 : GAP_X; // gap-x-[2px] vs gap-x-1
+      const gapY = isMobile ? 2 : GAP_Y;
+      const innerW = boardRef.current.clientWidth - pad;
+      const cellW = (innerW - (cols - 1) * gapX) / cols;
+      setBoardInnerH(rows * cellW + (rows - 1) * gapY);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(boardRef.current);
+    return () => ro.disconnect();
+  }, [grid, inRoom]);
+
+  // === Account picker handlers ===
+  const handleCreateAccount = () => {
+      const trimmed = newPseudoInput.trim();
+      if (trimmed.length === 0 || isCreatingAccount) return;
+      setIsCreatingAccount(true);
+      const send = () => socket.emit('create_account', { pseudo: trimmed });
+      if (socket.connected) send();
+      else socket.once('connect', send);
+  };
+
+  const handleSelectAccount = (acc: Account) => {
+      setActiveAccount(acc);
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, JSON.stringify(acc));
+      // Refresh info for this single account so the resume prompt is up to date
+      socket.emit('fetch_accounts_info', [acc]);
+  };
+
+  const handleRemoveAccount = (acc: Account) => {
+      const next = accounts.filter(a => accountKey(a) !== accountKey(acc));
+      setAccounts(next);
+      writeAccountsToStorage(next);
+      setAccountsInfo(prev => prev.filter(i => accountKey(i) !== accountKey(acc)));
+      if (activeAccount && accountKey(activeAccount) === accountKey(acc)) {
+          setActiveAccount(null);
+          localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
       }
   };
 
-  const getButtonState = () => {
-      if (!isEditing) return 'MODIFY';
-      if (storedPseudo && pseudo === storedPseudo) return 'CANCEL';
-      return 'LOGIN';
+  const handleResumeGame = (acc: Account, roomId: string) => {
+      setActiveAccount(acc);
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, JSON.stringify(acc));
+      joinRoom(roomId, acc);
   };
 
+  const handleSwitchAccount = () => {
+      setActiveAccount(null);
+      setSetupMode(null);
+      localStorage.removeItem(ACTIVE_ACCOUNT_KEY);
+  };
 
+  const activeAccountInfo: AccountInfo | undefined = activeAccount
+      ? accountsInfo.find(i => accountKey(i) === accountKey(activeAccount))
+      : undefined;
+
+
+
+  // Top-right corner: combined notification stack (friend + join requests)
+  const renderNotificationCorner = (inGame: boolean) => {
+    if (!activeAccount || (incomingFriendRequests.length === 0 && incomingRequests.length === 0)) return null;
+    const positionClass = inGame ? "fixed top-[84px] right-4 z-[60]" : "fixed top-4 right-4 z-[60]";
+    const friendCardClass = inGame
+      ? "glass-strong glass-tint-cyan rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(56,189,248,0.5)] border border-cyan-300/25"
+      : "bg-slate-900 rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(56,189,248,0.5)] border border-cyan-300/25";
+    const joinCardClass = inGame
+      ? "glass-strong glass-tint-violet rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)] border border-violet-300/25"
+      : "bg-slate-900 rounded-2xl p-3 flex items-center gap-2 shadow-[0_10px_30px_-10px_rgba(167,139,250,0.5)] border border-violet-300/25";
+    return (
+      <div className={`${positionClass} flex flex-col gap-2 max-w-[320px] w-[min(320px,calc(100vw-2rem))]`}>
+          <AnimatePresence>
+              {incomingFriendRequests.map((req) => (
+                  <motion.div
+                      key={`fr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
+                      initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                      className={friendCardClass}
+                  >
+                      <div className="p-2 rounded-lg bg-cyan-400/15 border border-cyan-300/25 shrink-0">
+                          <UserPlus className="w-4 h-4 text-cyan-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande d&apos;ami</div>
+                          <div className="text-sm font-bold text-white truncate">
+                              {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
+                          </div>
+                      </div>
+                      <button
+                          onClick={() => acceptFriendRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
+                          title="Accepter"
+                      >
+                          <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                          onClick={() => declineFriendRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                          title="Refuser"
+                      >
+                          <X className="w-3.5 h-3.5" />
+                      </button>
+                  </motion.div>
+              ))}
+              {incomingRequests.map((req) => (
+                  <motion.div
+                      key={`jr-${req.fromPseudo}#${req.fromTag}-${req.receivedAt}`}
+                      initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                      className={joinCardClass}
+                  >
+                      <div className="p-2 rounded-lg bg-violet-400/15 border border-violet-300/25 shrink-0">
+                          <MailPlus className="w-4 h-4 text-violet-accent" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <div className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Demande de rejoindre</div>
+                          <div className="text-sm font-bold text-white truncate">
+                              {req.fromPseudo}<span className="font-mono text-slate-400 text-xs">#{req.fromTag}</span>
+                          </div>
+                      </div>
+                      <button
+                          onClick={() => acceptJoinRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(52,211,153,0.4)]"
+                          title="Accepter"
+                      >
+                          <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                          onClick={() => declineJoinRequest(req)}
+                          className="px-2 py-1.5 rounded-lg text-[11px] font-bold glass text-slate-300 hover:text-white hover:bg-white/10 transition-all"
+                          title="Refuser"
+                      >
+                          <X className="w-3.5 h-3.5" />
+                      </button>
+                  </motion.div>
+              ))}
+          </AnimatePresence>
+      </div>
+    );
+  };
+
+  // In-game only: floating social button + drawer
+  const inGameSocialUI = activeAccount ? (
+    <>
+        <button
+            onClick={() => setSocialOpen(true)}
+            className="fixed bottom-4 left-4 z-30 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl glass-strong flex items-center justify-center hover:bg-white/[0.08] active:scale-95 transition-all shadow-[0_8px_28px_-8px_rgba(0,0,0,0.6)] border border-white/10"
+            title="Social"
+        >
+            <Users className="w-5 h-5 text-cyan-accent" />
+            {(incomingRequests.length + incomingFriendRequests.length) > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-gradient-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
+                    {incomingRequests.length + incomingFriendRequests.length}
+                </span>
+            )}
+        </button>
+
+        <SocialDrawer
+            isOpen={socialOpen}
+            onClose={() => setSocialOpen(false)}
+            variant="drawer"
+            activePseudo={activeAccount.pseudo}
+            activeTag={activeAccount.tag}
+        />
+    </>
+  ) : null;
 
   if (!inRoom) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-6 md:p-24 relative overflow-hidden">
-        {/* Ambient Background */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-blue-900/20 via-black to-black z-0 pointer-events-none" />
-        
-        {/* Recovery Toast */}
+      <main className="flex min-h-screen text-white relative overflow-hidden">
+        {/* Floating ambient blobs */}
+        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+            <div className="absolute top-[-10%] left-[-5%] w-[40rem] h-[40rem] rounded-full bg-cyan-500/20 blur-[120px] animate-float-blob" />
+            <div className="absolute top-[20%] right-[-10%] w-[35rem] h-[35rem] rounded-full bg-violet-500/20 blur-[120px] animate-float-blob" style={{ animationDelay: '-4s' }} />
+            <div className="absolute bottom-[-15%] left-[20%] w-[40rem] h-[40rem] rounded-full bg-emerald-500/15 blur-[120px] animate-float-blob" style={{ animationDelay: '-8s' }} />
+        </div>
 
-
+        {/* ── Main content (flex-1, centered) ── */}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-16 min-h-screen">
         <div className="z-10 flex flex-col items-center gap-8 w-full max-w-lg">
-            <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent tracking-tighter text-center mb-4 drop-shadow-lg">
-                DEMINEURS V2
-            </h1>
-            
-            <div className="w-full flex flex-col gap-2">
-                <label className="text-slate-400 text-xs font-bold uppercase tracking-wider ml-1">IDENTIFICATION</label>
-                <div className="flex gap-2">
-                    <input 
-                        type="text" 
-                        placeholder="Enter your Pseudo" 
-                        value={pseudo}
-                        onChange={(e) => setPseudo(e.target.value)}
-                        readOnly={!isEditing}
-                        onKeyDown={(e) => e.key === 'Enter' && pseudo.length > 0 && handleLogin()}
-                        className={`flex-1 px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none transition-all placeholder:text-slate-600 ${
-                            isEditing 
-                            ? 'focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
-                            : 'opacity-50 cursor-not-allowed bg-slate-950 text-slate-400'
-                        }`}
-                    />
-                    <button 
-                        onClick={handleLogin}
-                        disabled={isEditing && pseudo.length === 0}
-                        className={`px-6 py-3 rounded-xl font-bold text-white transition-all shadow-lg min-w-[100px] ${
-                            getButtonState() === 'MODIFY' ? 'bg-slate-700 hover:bg-slate-600' :
-                            getButtonState() === 'CANCEL' ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20' :
-                            pseudo.length > 0 
-                                ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20' 
-                                : 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none'
-                        }`}
-                    >
-                        {getButtonState()}
-                    </button>
-                </div>
+            <div className="text-center mb-2">
+                <h1 className="text-5xl md:text-7xl font-black tracking-tighter text-shimmer drop-shadow-[0_4px_30px_rgba(56,189,248,0.3)]">
+                    DEMINEURS V2
+                </h1>
+                <p className="text-slate-400 text-sm mt-2 tracking-widest uppercase">Co-op Minesweeper · Liquid Edition</p>
             </div>
-            
-            {!setupMode ? (
-                // MODE SELECTION
-                <div className="flex flex-col gap-6 w-full">
-                    <button 
-                        onClick={() => setSetupMode('classic')}
-                        className="group relative px-8 py-6 bg-slate-900/80 border border-blue-500/30 rounded-2xl hover:border-blue-500 hover:shadow-[0_0_30px_rgba(59,130,246,0.3)] transition-all flex flex-col items-center gap-2 overflow-hidden"
-                    >
-                        <div className="absolute inset-0 bg-blue-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                        <span className="text-2xl font-bold text-blue-400 group-hover:text-white transition-colors relative z-10">CLASSIC MODE</span>
-                        <span className="text-slate-400 text-sm relative z-10">Standard Minesweeper experience.</span>
-                    </button>
-                    
-                    <button 
-                        onClick={() => setSetupMode('hardcore')}
-                        className="group relative px-8 py-6 bg-slate-900/80 border border-purple-500/30 rounded-2xl hover:border-purple-500 hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] transition-all flex flex-col items-center gap-2 overflow-hidden"
-                    >
-                        <div className="absolute inset-0 bg-purple-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                        <div className="flex items-center gap-2 relative z-10">
-                            <Zap className="w-6 h-6 text-yellow-400 animate-pulse" />
-                            <span className="text-2xl font-bold text-purple-400 group-hover:text-white transition-colors">INFINITE MODE</span>
+
+            {!activeAccount ? (
+                /* === ACCOUNT PICKER === */
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full flex flex-col gap-5"
+                >
+                    {accounts.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                            <label className="text-slate-300/70 text-xs font-bold uppercase tracking-[0.2em] ml-1">
+                                Vos comptes
+                            </label>
+                            <div className="flex flex-col gap-2">
+                                {accounts.map((acc) => {
+                                    const info = accountsInfo.find(i => accountKey(i) === accountKey(acc));
+                                    const hasGame = !!info?.currentRoomId;
+                                    return (
+                                        <div
+                                            key={accountKey(acc)}
+                                            className="group relative glass rounded-2xl p-4 flex items-center gap-4 hover:bg-white/[0.07] hover:border-white/20 transition-all"
+                                        >
+                                            <div className={`p-2.5 rounded-xl ${hasGame ? 'bg-violet-400/15 border border-violet-300/25' : 'bg-cyan-400/10 border border-cyan-300/20'}`}>
+                                                <User className={`w-5 h-5 ${hasGame ? 'text-violet-accent' : 'text-cyan-accent'}`} />
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="font-bold text-white truncate">{acc.pseudo}</span>
+                                                    <span className="font-mono text-slate-400 text-sm">#{acc.tag}</span>
+                                                </div>
+                                                {hasGame ? (
+                                                    <div className="text-xs text-slate-300/80 mt-0.5">
+                                                        <span className={info?.gameMode === 'hardcore' ? 'text-violet-accent font-bold' : 'text-cyan-accent font-bold'}>
+                                                            {info?.gameMode === 'hardcore' ? 'INFINITE' : 'CLASSIC'}
+                                                        </span>
+                                                        <span className="text-slate-500 mx-1">·</span>
+                                                        <span className="capitalize">{info?.gameDifficulty}</span>
+                                                        {info?.gameMode === 'hardcore' && info.gameLevel && (
+                                                            <>
+                                                                <span className="text-slate-500 mx-1">·</span>
+                                                                <span>Lv {info.gameLevel}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-xs text-slate-500 mt-0.5">Aucune partie active</div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-1.5">
+                                                {hasGame && info?.currentRoomId && (
+                                                    <button
+                                                        onClick={() => handleResumeGame(acc, info.currentRoomId as string)}
+                                                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-300 to-fuchsia-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_14px_rgba(167,139,250,0.4)] flex items-center gap-1"
+                                                        title="Reprendre la partie"
+                                                    >
+                                                        <Play className="w-3 h-3" /> RESUME
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => handleSelectAccount(acc)}
+                                                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-300 to-sky-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_14px_rgba(56,189,248,0.4)] flex items-center gap-1"
+                                                    title="Utiliser ce compte"
+                                                >
+                                                    <LogIn className="w-3 h-3" /> SELECT
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRemoveAccount(acc)}
+                                                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                                                    title="Supprimer de cet appareil"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                        <span className="text-slate-400 text-sm relative z-10">Uncertainty & Ambiguous numbers.</span>
+                    )}
+
+                    {/* CREATE NEW ACCOUNT */}
+                    <div className="flex flex-col gap-3">
+                        <label className="text-slate-300/70 text-xs font-bold uppercase tracking-[0.2em] ml-1">
+                            {accounts.length > 0 ? 'Ou créer un nouveau compte' : 'Créer votre premier compte'}
+                        </label>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                placeholder="Pseudo (un tag #XXXX est généré automatiquement)"
+                                value={newPseudoInput}
+                                onChange={(e) => setNewPseudoInput(e.target.value.slice(0, 32))}
+                                onKeyDown={(e) => e.key === 'Enter' && newPseudoInput.trim().length > 0 && handleCreateAccount()}
+                                disabled={isCreatingAccount}
+                                className="flex-1 px-4 py-3 rounded-2xl text-white focus:outline-none focus:border-cyan-300/60 focus:shadow-[0_0_20px_rgba(56,189,248,0.25)] transition-all placeholder:text-slate-500 glass"
+                            />
+                            <button
+                                onClick={handleCreateAccount}
+                                disabled={newPseudoInput.trim().length === 0 || isCreatingAccount}
+                                className={`px-5 py-3 rounded-2xl font-bold transition-all min-w-[120px] glass-sheen flex items-center justify-center gap-2 ${
+                                    newPseudoInput.trim().length > 0 && !isCreatingAccount
+                                        ? 'bg-gradient-to-r from-cyan-300 to-violet-300 text-slate-950 shadow-[0_0_25px_rgba(56,189,248,0.4)] hover:brightness-110'
+                                        : 'glass text-slate-500 cursor-not-allowed'
+                                }`}
+                            >
+                                <UserPlus className="w-4 h-4" />
+                                {isCreatingAccount ? '...' : 'CREATE'}
+                            </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500 ml-1">
+                            Plusieurs comptes peuvent partager le même pseudo — le #tag les rend uniques.
+                        </p>
+                    </div>
+                </motion.div>
+            ) : (
+                /* === ACCOUNT IS SELECTED === */
+                <div className="w-full flex flex-col gap-6">
+                    {/* Active account badge */}
+                    <div className="w-full flex items-center justify-between glass rounded-2xl px-4 py-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="p-2 rounded-xl bg-cyan-400/10 border border-cyan-300/20">
+                                <User className="w-4 h-4 text-cyan-accent" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-[10px] text-slate-400 uppercase tracking-widest">Connecté en tant que</div>
+                                <div className="font-bold text-white truncate">
+                                    {activeAccount.pseudo}
+                                    <span className="font-mono text-slate-400 text-sm ml-0.5">#{activeAccount.tag}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleSwitchAccount}
+                            className="text-xs font-bold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                        >
+                            SWITCH
+                        </button>
+                    </div>
+
+                    {/* Resume prompt if a game is in progress */}
+                    {!setupMode && activeAccountInfo?.currentRoomId && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="glass-strong glass-tint-violet rounded-2xl p-4 flex items-center gap-3"
+                        >
+                            <div className="p-2 rounded-xl bg-violet-400/15 border border-violet-300/25 shrink-0">
+                                <Play className="w-4 h-4 text-violet-accent" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-white">Partie en cours</div>
+                                <div className="text-xs text-slate-300/80">
+                                    <span className={activeAccountInfo.gameMode === 'hardcore' ? 'text-violet-accent font-bold' : 'text-cyan-accent font-bold'}>
+                                        {activeAccountInfo.gameMode === 'hardcore' ? 'INFINITE' : 'CLASSIC'}
+                                    </span>
+                                    <span className="text-slate-500 mx-1">·</span>
+                                    <span className="capitalize">{activeAccountInfo.gameDifficulty}</span>
+                                    {activeAccountInfo.gameMode === 'hardcore' && activeAccountInfo.gameLevel && (
+                                        <>
+                                            <span className="text-slate-500 mx-1">·</span>
+                                            <span>Level {activeAccountInfo.gameLevel}</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => handleResumeGame(activeAccount, activeAccountInfo.currentRoomId as string)}
+                                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-violet-300 to-fuchsia-300 text-slate-950 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_14px_rgba(167,139,250,0.4)]"
+                            >
+                                RESUME
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {!setupMode ? (
+                <div className="flex flex-col gap-5 w-full">
+                    {/* CLASSIC MODE */}
+                    <button
+                        onClick={() => setSetupMode('classic')}
+                        className="group relative px-8 py-7 glass glass-sheen glass-tint-cyan rounded-3xl hover:shadow-[0_0_50px_-10px_rgba(56,189,248,0.5)] hover:border-cyan-300/50 transition-all flex flex-col items-center gap-2 overflow-hidden"
+                    >
+                        <div className="flex items-center gap-3 relative z-10">
+                            <Activity className="w-7 h-7 text-cyan-accent drop-shadow-[0_0_8px_rgba(56,189,248,0.6)]" />
+                            <span className="text-2xl font-bold text-white tracking-wide">CLASSIC MODE</span>
+                        </div>
+                        <span className="text-slate-300/70 text-sm relative z-10">Expérience Démineur classique.</span>
                     </button>
 
-                     <div className="flex gap-2 w-full mt-8">
-                        <input 
-                            type="text" 
-                            placeholder="Have a code? Enter Room ID" 
-                            className="flex-1 px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-slate-500"
+                    {/* INFINITE MODE */}
+                    <button
+                        onClick={() => setSetupMode('hardcore')}
+                        className="group relative px-8 py-7 glass glass-sheen glass-tint-violet rounded-3xl hover:shadow-[0_0_50px_-10px_rgba(167,139,250,0.5)] hover:border-violet-300/50 transition-all flex flex-col items-center gap-2 overflow-hidden"
+                    >
+                        <div className="flex items-center gap-3 relative z-10">
+                            <Zap className="w-7 h-7 text-amber-accent animate-pulse drop-shadow-[0_0_8px_rgba(252,211,77,0.6)]" />
+                            <span className="text-2xl font-bold text-white tracking-wide">INFINITE MODE</span>
+                        </div>
+                        <span className="text-slate-300/70 text-sm relative z-10">Incertitude &amp; Chiffres ambigus.</span>
+                    </button>
+
+                    {/* JOIN ROOM */}
+                    <div className="flex gap-2 w-full mt-6">
+                        <input
+                            type="text"
+                            placeholder="Code de la salle"
+                            className="flex-1 px-4 py-3 rounded-2xl text-white focus:outline-none focus:border-cyan-300/60 focus:shadow-[0_0_20px_rgba(56,189,248,0.25)] transition-all placeholder:text-slate-500 glass uppercase"
                             onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                         />
-                        <button 
+                        <button
                             onClick={() => joinRoom(roomId)}
-                            className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold text-white transition-colors"
+                            className="px-6 py-3 glass glass-sheen text-white rounded-2xl font-bold transition-colors hover:bg-white/10"
                         >
                             JOIN
                         </button>
@@ -460,31 +843,33 @@ export default function Home() {
                 </div>
             ) : (
                 // SETUP SCREEN
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="w-full bg-slate-900/90 border border-slate-700 p-8 rounded-2xl shadow-xl backdrop-blur-md flex flex-col gap-6"
+                    className="w-full glass-strong p-5 md:p-8 rounded-2xl md:rounded-3xl flex flex-col gap-4 md:gap-6"
                 >
                     <div className="flex justify-between items-center mb-2">
                         <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                            {setupMode === 'classic' ? <Activity className="text-blue-500"/> : <Zap className="text-purple-500"/>}
+                            {setupMode === 'classic'
+                                ? <Activity className="text-cyan-accent drop-shadow-[0_0_8px_rgba(56,189,248,0.6)]"/>
+                                : <Zap className="text-violet-accent drop-shadow-[0_0_8px_rgba(167,139,250,0.6)]"/>}
                             Setup Game
                         </h2>
-                        <button onClick={() => setSetupMode(null)} className="text-slate-500 hover:text-white text-sm hover:underline">Cancel</button>
+                        <button onClick={() => setSetupMode(null)} className="text-slate-400 hover:text-white text-sm hover:underline">Annuler</button>
                     </div>
 
                     {/* Difficulty */}
                     <div className="space-y-3">
-                        <label className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Difficulty</label>
-                        <div className="grid grid-cols-5 gap-2">
+                        <label className="text-slate-300/70 text-xs font-semibold uppercase tracking-[0.15em]">Difficulté</label>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                             {['easy', 'medium', 'hard', 'hardcore', 'custom'].map((d) => (
                                 <button
                                     key={d}
                                     onClick={() => setDifficulty(d)}
-                                    className={`py-2 rounded-lg font-bold capitalize transition-all text-xs sm:text-sm ${
-                                        difficulty === d 
-                                        ? 'bg-blue-600 text-white shadow-lg' 
-                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                    className={`py-2.5 rounded-xl font-bold capitalize transition-all text-xs sm:text-sm border ${
+                                        difficulty === d
+                                        ? 'bg-gradient-to-br from-cyan-400/30 to-violet-400/30 text-white border-cyan-300/60 shadow-[0_0_18px_rgba(56,189,248,0.35)]'
+                                        : 'bg-white/[0.04] text-slate-300 border-white/10 hover:bg-white/[0.08] hover:border-white/20'
                                     }`}
                                 >
                                     {d}
@@ -495,17 +880,17 @@ export default function Home() {
 
                     {/* CUSTOM SETTINGS */}
                     {difficulty === 'custom' && (
-                        <motion.div 
+                        <motion.div
                            initial={{ opacity: 0, height: 0 }}
                            animate={{ opacity: 1, height: 'auto' }}
-                           className="space-y-4 bg-slate-950/50 p-4 rounded-xl border border-slate-700/50"
+                           className="space-y-5 glass-soft p-5 rounded-2xl"
                         >
-                            <div className="flex items-center gap-2 text-blue-400 mb-2">
+                            <div className="flex items-center gap-2 text-cyan-accent mb-1">
                                 <Settings className="w-4 h-4" />
-                                <span className="font-bold text-sm uppercase">Custom Configuration</span>
+                                <span className="font-bold text-sm uppercase tracking-wider">Custom Configuration</span>
                             </div>
 
-                            <RangeSlider 
+                            <RangeSlider
                                 label="Grid Size"
                                 min={0}
                                 max={18}
@@ -514,7 +899,7 @@ export default function Home() {
                                 formatValue={() => `${customRows} x ${customCols}`}
                             />
 
-                            <RangeSlider 
+                            <RangeSlider
                                 label="Bomb Density (1 Mine / X Cells)"
                                 min={3.0}
                                 max={6.0}
@@ -523,11 +908,11 @@ export default function Home() {
                                 onChange={setCustomBombRate}
                                 formatValue={(v) => v.toFixed(1)}
                             />
-                             <div className="text-right text-xs text-slate-400 -mt-2">
+                            <div className="text-right text-xs text-slate-400 -mt-3">
                                 Total Mines: <span className="text-white font-bold">{customMines}</span>
                             </div>
 
-                            <RangeSlider 
+                            <RangeSlider
                                 label="Scanners Available"
                                 min={0}
                                 max={10}
@@ -537,24 +922,26 @@ export default function Home() {
                             />
 
                             {/* DOUBLE NUMBERS (LYING) */}
-                            <div className="flex items-center justify-between py-2">
-                                <label className="text-slate-400 text-sm font-semibold uppercase tracking-wider">
-                                    Allow Double Numbers On same Case
+                            <div className="flex items-center justify-between py-1">
+                                <label className="text-slate-300/80 text-xs font-semibold uppercase tracking-[0.15em] max-w-[70%]">
+                                    Allow Double Numbers On Same Case
                                 </label>
                                 <button
                                     onClick={() => setCustomAllowLying(!customAllowLying)}
-                                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                                        customAllowLying ? 'bg-blue-600' : 'bg-slate-700'
+                                    className={`relative w-12 h-7 rounded-full transition-all border ${
+                                        customAllowLying
+                                            ? 'bg-gradient-to-r from-cyan-400 to-violet-400 border-white/20 shadow-[0_0_12px_rgba(56,189,248,0.5)]'
+                                            : 'bg-white/10 border-white/15'
                                     }`}
                                 >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                                        customAllowLying ? 'translate-x-6' : 'translate-x-0'
+                                    <div className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform shadow-md ${
+                                        customAllowLying ? 'translate-x-5' : 'translate-x-0'
                                     }`} />
                                 </button>
                             </div>
 
                             {customAllowLying && (
-                                <RangeSlider 
+                                <RangeSlider
                                     label="Double Number Chance (%)"
                                     min={10}
                                     max={25}
@@ -569,212 +956,300 @@ export default function Home() {
 
                     {/* HP */}
                     <div className="space-y-3">
-                        <RangeSlider 
+                        <RangeSlider
                             label="Health Points (HP)"
-                            min={1} 
-                            max={10} 
-                            value={customHp} 
-                            onChange={(val) => setCustomHp(Math.round(val))} // RangeSlider returns float, hp needs int
+                            min={1}
+                            max={10}
+                            value={customHp}
+                            onChange={(val) => setCustomHp(Math.round(val))}
                             formatValue={(v) => `${Math.round(v)} ♥`}
                         />
                     </div>
 
-                    <button 
+                    <button
                         onClick={startGame}
-                        className={`w-full py-4 mt-4 rounded-xl font-bold text-xl shadow-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] ${
-                            setupMode === 'classic' 
-                            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20' 
-                            : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20'
+                        className={`w-full py-4 mt-2 rounded-2xl font-bold text-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] glass-sheen ${
+                            setupMode === 'classic'
+                            ? 'bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]'
+                            : 'bg-gradient-to-r from-violet-300 to-fuchsia-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(167,139,250,0.6)]'
                         }`}
                     >
                         START GAME
                     </button>
                 </motion.div>
             )}
+                </div>
+            )}
         </div>
+        </div>
+
+        {/* ── Permanent social panel (desktop only, shown when account is active) ── */}
+        {activeAccount && (
+            <aside className="hidden lg:flex w-[340px] shrink-0 min-h-screen border-l border-white/10 glass-strong flex-col">
+                <SocialDrawer
+                    isOpen={true}
+                    variant="panel"
+                    activePseudo={activeAccount.pseudo}
+                    activeTag={activeAccount.tag}
+                />
+            </aside>
+        )}
+
+        {/* ── Mobile social toggle (visible only on < lg when sidebar is hidden) ── */}
+        {activeAccount && (
+            <>
+                <button
+                    onClick={() => setHomeSocialOpen(true)}
+                    className="lg:hidden fixed bottom-4 right-4 z-30 w-12 h-12 rounded-2xl glass-strong flex items-center justify-center hover:bg-white/[0.08] active:scale-95 transition-all shadow-[0_8px_28px_-8px_rgba(0,0,0,0.6)] border border-white/10"
+                    title="Social"
+                >
+                    <Users className="w-5 h-5 text-cyan-accent" />
+                    {(incomingRequests.length + incomingFriendRequests.length) > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-gradient-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
+                            {incomingRequests.length + incomingFriendRequests.length}
+                        </span>
+                    )}
+                </button>
+                <SocialDrawer
+                    isOpen={homeSocialOpen}
+                    onClose={() => setHomeSocialOpen(false)}
+                    variant="drawer"
+                    activePseudo={activeAccount.pseudo}
+                    activeTag={activeAccount.tag}
+                />
+            </>
+        )}
+        {renderNotificationCorner(false)}
       </main>
     );
   }
 
+  // Board max-width: target 40px cells + 4px gap + 40px glass padding
+  const boardCols = grid[0]?.length || 0;
+  const boardMaxW = boardCols ? boardCols * 40 + (boardCols - 1) * 4 + 40 : 340;
+
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header className="w-full flex justify-between items-center mb-8 px-4 max-w-7xl mx-auto">
-          <div className="flex gap-4 items-center">
-             <button onClick={leaveRoom} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm font-bold text-slate-200 transition-colors border border-slate-700">
-                ← MENU
+      <header className="w-full flex justify-between items-center mb-2 md:mb-6 px-1 md:px-2 max-w-7xl mx-auto gap-1 md:gap-3">
+
+          {/* ── Left HUD Bar ── */}
+          <div className="flex items-stretch bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 shadow-md shadow-black/40 overflow-hidden">
+
+             {/* MENU */}
+             <button
+                onClick={leaveRoom}
+                className="flex items-center gap-1 md:gap-2 px-2 md:px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
+                title="Back to menu"
+             >
+                <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span className="text-[10px] md:text-[11px] font-bold tracking-widest uppercase hidden sm:inline">Menu</span>
              </button>
-             
-             {/* Scoreboard */}
+
+             {/* Level (hardcore) — amber accent */}
              {setupMode === 'hardcore' && (
-                 <div className="flex items-center gap-2 bg-purple-900/50 px-4 py-1.5 rounded-lg border border-purple-500/50">
-                     <span className="text-purple-300 font-bold text-sm">LEVEL</span>
-                     <span className="text-white font-mono text-xl font-bold">{score + 1}</span>
+                 <div className="relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50">
+                     <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-400" />
+                     <span className="text-white font-mono font-bold text-xs md:text-sm tabular-nums">{score + 1}</span>
+                     <span className="text-slate-500 text-[10px] font-semibold uppercase hidden sm:block">Lv</span>
+                     <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-amber-400" />
                  </div>
              )}
-             
-             {/* Mine Counter */}
-             <div className="flex items-center gap-2 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-700/50">
-                   <div className={`font-mono text-xl font-bold ${remainingMines < 0 ? 'text-red-500' : 'text-white'}`}>
-                       {remainingMines}
-                   </div>
-                   <FlagIcon className="w-5 h-5 text-red-500 fill-red-500" />
+
+             {/* Mine Counter — rose accent when negative */}
+             <div className={`relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 ${
+                 remainingMines < 0 ? 'bg-rose-500/10' : ''
+             }`}>
+                 <FlagIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${remainingMines < 0 ? 'text-rose-400 fill-rose-400' : 'text-rose-400/70 fill-rose-400/30'}`} />
+                 <span className={`font-mono font-bold text-xs md:text-sm tabular-nums ${remainingMines < 0 ? 'text-rose-300' : 'text-white'}`}>
+                     {remainingMines}
+                 </span>
+                 {remainingMines < 0 && (
+                     <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-rose-400" />
+                 )}
              </div>
 
-              {/* Scanner Control */}
-              <button 
-                  onClick={() => scansAvailable > 0 && setIsScanning(!isScanning)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
-                      isScanning 
-                      ? 'bg-green-500/20 border-green-500 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.3)]' 
-                      : scansAvailable > 0
-                        ? 'bg-slate-900/50 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-500'
-                        : 'bg-slate-900/30 border-slate-800 text-slate-600 cursor-not-allowed'
-                  }`}
-                  title="Scanner Tool"
-              >
-                   <Radar className={`w-5 h-5 ${isScanning ? 'animate-spin-slow' : ''}`} />
-                   <span className="font-mono font-bold text-xl">{scansAvailable}</span>
-              </button>
-
-             <div 
-                 onClick={handleCopyRoomId}
-                 className="text-sm font-mono text-slate-400 hidden md:flex items-center gap-2 cursor-pointer hover:text-slate-200 transition-colors active:scale-95 transform relative"
-                 title="Click to copy Room ID"
+             {/* Scanner — emerald accent when active */}
+             <button
+                 onClick={() => scansAvailable > 0 && setIsScanning(!isScanning)}
+                 disabled={scansAvailable <= 0}
+                 title="Scanner Tool"
+                 className={`relative flex hover:cursor-pointer items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 transition-colors ${
+                     isScanning
+                         ? 'bg-emerald-500/10 text-emerald-200'
+                         : scansAvailable > 0
+                             ? 'text-slate-300 hover:text-white hover:bg-slate-800'
+                             : 'text-slate-600 cursor-not-allowed'
+                 }`}
              >
-                ROOM: <span className="text-white font-bold">{roomId}</span>
-                <AnimatePresence>
-                    {copied && (
-                        <motion.span 
-                            initial={{ opacity: 0, x: -10 }} 
-                            animate={{ opacity: 1, x: 0 }} 
-                            exit={{ opacity: 0 }}
-                            className="absolute left-full ml-2 bg-green-500 text-black text-xs font-bold px-2 py-0.5 rounded"
-                        >
-                            COPIED!
-                        </motion.span>
-                    )}
-                </AnimatePresence>
-             </div>
+                 <Radar className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isScanning ? 'text-emerald-400' : scansAvailable > 0 ? 'text-emerald-500/70' : 'text-slate-600'}`} />
+                 <span className="font-mono font-bold text-xs md:text-sm tabular-nums">{scansAvailable}</span>
+                 {isScanning && (
+                     <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-emerald-400" />
+                 )}
+             </button>
+
+             {/* Mobile-only: Flag / Reveal toggle */}
+             <button
+                 onClick={() => setFlagMode(!flagMode)}
+                 title={flagMode ? 'Mode Drapeau (tap = flag)' : 'Mode Révéler (tap = reveal)'}
+                 className={`relative flex md:hidden items-center gap-1 px-2 border-r border-slate-700/50 transition-colors ${
+                     flagMode
+                         ? 'bg-rose-500/15 text-rose-300'
+                         : 'text-slate-300 hover:text-white'
+                 }`}
+             >
+                 {flagMode
+                     ? <FlagIcon className="w-3.5 h-3.5 text-rose-400 fill-rose-400/40" />
+                     : <Crosshair className="w-3.5 h-3.5" />
+                 }
+             </button>
+
+             {/* Room ID */}
+             <button
+                 onClick={handleCopyRoomId}
+                 className="hidden md:flex hover:cursor-pointer items-center gap-2 px-4 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                 title="Copy Room ID"
+             >
+                 {copied
+                     ? <Check className="w-4 h-4 text-emerald-400" />
+                     : <Copy className="w-4 h-4" />
+                 }
+                 <span className="font-mono font-bold text-sm tracking-widest">{roomId}</span>
+             </button>
           </div>
-          
-           <div className="flex gap-1">
-              {[...Array(3)].map((_, i) => ( 
-                  <motion.div 
+
+          {/* ── Right: Hearts ── */}
+          <div className="flex items-center gap-1 bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 px-2 md:px-3.5 shadow-md shadow-black/40">
+              {[...Array(3)].map((_, i) => (
+                  <div
                      key={i}
-                     initial={{ scale: 1 }}
-                     animate={{ scale: i < hp ? 1 : 0.8, opacity: i < hp ? 1 : 0.2 }}
+                     className={i < hp ? `heart-wave-${i}` : ''}
                   >
-                      <Heart className={`w-8 h-8 fill-current ${i < hp ? 'text-red-500' : 'text-slate-800'}`} />
-                  </motion.div>
+                      <Heart
+                         className={`w-3.5 h-3.5 md:w-4 md:h-4 fill-current ${
+                             i < hp ? 'text-rose-400' : 'text-slate-700'
+                         }`}
+                      />
+                  </div>
               ))}
-              {hp > 3 && <span className="text-red-500 font-bold ml-2">+{hp - 3}</span>}
-           </div>
+              {hp > 3 && (
+                  <span className="text-rose-300 font-bold text-[10px] md:text-[11px] font-mono ml-0.5 px-1 md:px-1.5 py-0.5 rounded bg-rose-500/15">
+                      +{hp - 3}
+                  </span>
+              )}
+          </div>
+
       </header>
-      
+
        {/* GAME BOARD WINDOW */}
        <div className="w-full flex justify-center">
-            <div className="relative bg-slate-900/50 p-4 rounded-xl shadow-2xl overflow-hidden border border-slate-700/50 backdrop-blur-sm">
-                
-                {/* 1. SPACER GRID (Invisible, sets container size) */}
-                <div className="invisible pointer-events-none">
-                     <Grid grid={grid} roomId={roomId} isScanning={false} onScan={() => {}} />
-                </div>
-
-                {/* 2. ANIMATED GRID LAYER */}
-                <motion.div
-                        className={`absolute top-4 left-4 right-4 flex flex-col items-center ${isTransitioning ? 'pointer-events-none' : ''}`}
+            {/* Glass shell — on mobile, allow scroll in both directions instead of squishing */}
+            <div
+                ref={boardRef}
+                className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-80px)] md:max-h-none"
+                style={{ width: `min(${boardMaxW}px, 98vw)` }}
+            >
+                <div
+                    className="relative"
+                    style={{ minWidth: boardCols > 10 ? `${boardCols * 32 + (boardCols - 1) * 2}px` : undefined }}
+                >
+                    <motion.div
+                        className={`w-full ${isTransitioning ? 'pointer-events-none' : ''}`}
                         initial={false}
-                        animate={isTransitioning && transitionGrid ? { 
-                            y: `-${((transitionGrid.length - grid.length) / transitionGrid.length) * 100}%` 
+                        animate={isTransitioning && transitionGrid ? {
+                            y: `-${((transitionGrid.length - grid.length) / transitionGrid.length) * 100}%`
                         } : { y: 0 }}
                         transition={isTransitioning ? { duration: 2.0, ease: "easeInOut" } : { duration: 0 }}
-                >
-                    <Grid 
-                        grid={isTransitioning && transitionGrid ? transitionGrid : grid} 
-                        roomId={roomId} 
-                        myRole={myRole} 
-                        isScanning={isScanning} 
-                        onScan={() => setIsScanning(false)} 
-                    />
-                </motion.div>
+                    >
+                        <Grid
+                            grid={isTransitioning && transitionGrid ? transitionGrid : grid}
+                            roomId={roomId}
+                            myRole={myRole}
+                            isScanning={isScanning}
+                            onScan={() => setIsScanning(false)}
+                            flagMode={flagMode}
+                        />
+                    </motion.div>
+                </div>
             </div>
        </div>
 
-      <div className="fixed bottom-4 right-4 text-xs text-slate-600">
-         Server: Connected
+      <div className="hidden md:flex fixed bottom-4 right-4 text-xs text-slate-500 items-center gap-2 glass px-3 py-1.5 rounded-full">
+         <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
+         Serveur : Connecté
       </div>
 
        {/* GAME OVER OVERLAY */}
        <AnimatePresence>
             {isGameOver && showGameOverModal && (
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4"
                 >
-                    <motion.div 
+                    <motion.div
                         initial={{ scale: 0.9, y: 20 }}
                         animate={{ scale: 1, y: 0 }}
-                        className="bg-slate-900 border border-red-500/50 p-8 rounded-2xl max-w-md w-full text-center shadow-[0_0_50px_rgba(239,68,68,0.2)]"
+                        className="glass-strong glass-tint-coral p-5 md:p-8 rounded-3xl max-w-md w-full text-center"
+                        style={{ boxShadow: '0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px -10px rgba(251,113,133,0.45)' }}
                     >
-                        <h2 className="text-5xl font-black text-red-500 mb-2">CRITICAL FAILURE</h2>
-                        <p className="text-slate-400 mb-8 text-lg">You Failed ! (looser)</p>
-                        
+                        <h2 className="text-3xl md:text-5xl font-black text-rose-300 mb-2 drop-shadow-[0_0_15px_rgba(251,113,133,0.5)]">ÉCHEC CRITIQUE</h2>
+                        <p className="text-slate-300 mb-5 md:mb-8 text-base md:text-lg">Vous avez échoué ! (perdant)</p>
+
                         <div className="flex flex-col gap-3">
-                                <button 
-                                    onClick={restartGame}
-                                    className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-black text-xl transition-all rounded-lg shadow-lg hover:shadow-red-500/50"
-                                >
-                                    RETRY
-                                </button>
-                            <button 
-                                onClick={() => setShowGameOverModal(false)}
-                                className="w-full py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xl transition-colors rounded-lg"
+                            <button
+                                onClick={restartGame}
+                                className="w-full py-4 bg-gradient-to-r from-rose-400 to-pink-400 text-slate-950 font-black text-xl transition-all rounded-2xl shadow-[0_10px_40px_-10px_rgba(251,113,133,0.6)] hover:brightness-110 active:scale-[0.98]"
                             >
-                                VIEW BOARD
+                                RÉESSAYER
                             </button>
-                            <button 
-                                onClick={leaveRoom}
-                                className="w-full py-4 bg-white text-black font-black text-xl hover:bg-slate-200 transition-colors rounded-lg"
+                            <button
+                                onClick={() => setShowGameOverModal(false)}
+                                className="w-full py-4 glass glass-sheen text-white font-bold text-xl transition-colors rounded-2xl hover:bg-white/10"
                             >
-                                RETURN TO HOME
+                                VOIR LE PLATEAU
+                            </button>
+                            <button
+                                onClick={leaveRoom}
+                                className="w-full py-4 glass-soft text-slate-200 font-black text-xl hover:bg-white/10 transition-colors rounded-2xl"
+                            >
+                                RETOUR À L'ACCUEIL
                             </button>
                         </div>
                     </motion.div>
                 </motion.div>
             )}
 
-            {/* PERSISTENT GAME OVER CONTROLS (When modal is closed) */}
             {isGameOver && !showGameOverModal && (
-                <motion.div 
+                <motion.div
                     initial={{ y: 100 }}
                     animate={{ y: 0 }}
-                    className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/90 border-t border-red-500/50 p-4 backdrop-blur-md"
+                    className="fixed bottom-0 left-0 right-0 z-40 glass-strong border-t border-rose-300/30 p-4"
                 >
-                    <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
+                    <div className="max-w-7xl mx-auto flex justify-between items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
-                             <span className="text-red-500 font-bold text-xl">GAME OVER</span>
-                             <button 
+                             <span className="text-rose-300 font-bold text-xl drop-shadow-[0_0_8px_rgba(251,113,133,0.5)]">PARTIE TERMINÉE</span>
+                             <button
                                 onClick={() => setShowGameOverModal(true)}
                                 className="text-sm text-slate-400 hover:text-white underline ml-2"
                              >
-                                Show Menu
+                                Voir le menu
                              </button>
                         </div>
 
                         <div className="flex gap-2">
                             {setupMode && (
-                                <button 
+                                <button
                                     onClick={restartGame}
-                                    className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg shadow-lg hover:shadow-red-500/50 transition-all"
+                                    className="px-6 py-2 bg-gradient-to-r from-rose-400 to-pink-400 text-slate-950 font-bold rounded-xl shadow-[0_0_18px_rgba(251,113,133,0.4)] hover:brightness-110 transition-all"
                                 >
-                                    RETRY
+                                    RÉESSAYER
                                 </button>
                             )}
-                            <button 
+                            <button
                                 onClick={leaveRoom}
-                                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors"
+                                className="px-6 py-2 glass text-white font-bold rounded-xl hover:bg-white/10 transition-colors"
                             >
                                 MENU
                             </button>
@@ -785,36 +1260,37 @@ export default function Home() {
 
             {/* GAME WIN MODAL */}
             {isGameWon && showGameWinModal && (
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-4"
                 >
-                    <motion.div 
+                    <motion.div
                         initial={{ scale: 0.9, y: 20 }}
                         animate={{ scale: 1, y: 0 }}
-                        className="bg-slate-900 border border-green-500/50 p-8 rounded-2xl max-w-md w-full text-center shadow-[0_0_50px_rgba(34,197,94,0.2)]"
+                        className="glass-strong glass-tint-mint p-5 md:p-8 rounded-3xl max-w-md w-full text-center"
+                        style={{ boxShadow: '0 30px 80px -20px rgba(0,0,0,0.7), 0 0 60px -10px rgba(52,211,153,0.45)' }}
                     >
-                        <h2 className="text-5xl font-black text-green-500 mb-2">Nice Bravo !</h2>
-                        <p className="text-slate-400 mb-8 text-lg">Sector Cleared Successfully!</p>
-                        
+                        <h2 className="text-3xl md:text-5xl font-black text-mint-accent mb-2 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">Bravo !</h2>
+                        <p className="text-slate-300 mb-5 md:mb-8 text-base md:text-lg">Secteur dégagé avec succès !</p>
+
                         <div className="flex flex-col gap-3">
-                                <button 
-                                    onClick={restartGame}
-                                    className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-black text-xl transition-all rounded-lg shadow-lg hover:shadow-green-500/50"
-                                >
-                                    PLAY AGAIN
-                                </button>
-                            <button 
+                            <button
+                                onClick={restartGame}
+                                className="w-full py-4 bg-gradient-to-r from-emerald-300 to-teal-400 text-slate-950 font-black text-xl transition-all rounded-2xl shadow-[0_10px_40px_-10px_rgba(52,211,153,0.6)] hover:brightness-110 active:scale-[0.98]"
+                            >
+                                PLAY AGAIN
+                            </button>
+                            <button
                                 onClick={() => setShowGameWinModal(false)}
-                                className="w-full py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold text-xl transition-colors rounded-lg"
+                                className="w-full py-4 glass glass-sheen text-white font-bold text-xl transition-colors rounded-2xl hover:bg-white/10"
                             >
                                 VIEW BOARD
                             </button>
-                            <button 
+                            <button
                                 onClick={leaveRoom}
-                                className="w-full py-4 bg-white text-black font-black text-xl hover:bg-slate-200 transition-colors rounded-lg"
+                                className="w-full py-4 glass-soft text-slate-200 font-black text-xl hover:bg-white/10 transition-colors rounded-2xl"
                             >
                                 RETURN TO HOME
                             </button>
@@ -823,17 +1299,16 @@ export default function Home() {
                 </motion.div>
             )}
 
-            {/* PERSISTENT GAME WIN CONTROLS */}
             {isGameWon && !showGameWinModal && (
-                <motion.div 
+                <motion.div
                     initial={{ y: 100 }}
                     animate={{ y: 0 }}
-                    className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/90 border-t border-green-500/50 p-4 backdrop-blur-md"
+                    className="fixed bottom-0 left-0 right-0 z-40 glass-strong border-t border-emerald-300/30 p-4"
                 >
-                    <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
+                    <div className="max-w-7xl mx-auto flex justify-between items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
-                             <span className="text-green-500 font-bold text-xl">VICTORY</span>
-                             <button 
+                             <span className="text-mint-accent font-bold text-xl drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]">VICTORY</span>
+                             <button
                                 onClick={() => setShowGameWinModal(true)}
                                 className="text-sm text-slate-400 hover:text-white underline ml-2"
                              >
@@ -843,16 +1318,16 @@ export default function Home() {
 
                         <div className="flex gap-2">
                             {setupMode && (
-                                <button 
+                                <button
                                     onClick={restartGame}
-                                    className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg hover:shadow-green-500/50 transition-all"
+                                    className="px-6 py-2 bg-gradient-to-r from-emerald-300 to-teal-400 text-slate-950 font-bold rounded-xl shadow-[0_0_18px_rgba(52,211,153,0.4)] hover:brightness-110 transition-all"
                                 >
                                     PLAY AGAIN
                                 </button>
                             )}
-                            <button 
+                            <button
                                 onClick={leaveRoom}
-                                className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors"
+                                className="px-6 py-2 glass text-white font-bold rounded-xl hover:bg-white/10 transition-colors"
                             >
                                 MENU
                             </button>
@@ -861,6 +1336,8 @@ export default function Home() {
                 </motion.div>
             )}
        </AnimatePresence>
+       {inGameSocialUI}
+       {renderNotificationCorner(true)}
     </GameContainer>
   );
 }

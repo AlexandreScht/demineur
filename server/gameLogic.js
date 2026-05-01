@@ -5,7 +5,8 @@ class MinesweeperGame {
     this.minesCount = minesCount;
     this.initialMinesCount = minesCount;
     this.mode = mode; // 'classic' ou 'hardcore'
-    this.hp = hp; 
+    this.hp = hp;
+    this.initialHp = hp; // remembered so restart_game can restore the starting HP
     this.difficulty = difficulty;
     this.customScans = customScans;
     this.allowLying = allowLying;
@@ -259,16 +260,16 @@ class MinesweeperGame {
     let forbiddenSet;
     if (startRowOverride !== null) {
         forbiddenSet = new Set();
-        // If we have extraForbidden constraints (Seam constraints), use them
+        // Seam constraints
         if (extraForbidden) {
              extraForbidden.forEach(k => forbiddenSet.add(k));
         }
-        // Minimal safety for Infinite Mode if no extra constraints provided? 
-        // Actually, if startRowOverride is used, usually we rely on that. 
-        // The original code added a 3x3 safety zone here around SAFE_X/SAFE_Y. 
-        // But in Infinite Mode scroll, SAFE_X/SAFE_Y are meaningless (usually 0,0).
-        // So we strictly trust extraForbidden if present, or create minimal if empty?
-        // Let's keep the user's implicit logic: if extraForbidden is provided, it's the constraint.
+        // Protect ALL of row 0 — it is the bridge carried over from the previous level.
+        // Without this, roughenShapes converts already-open row-0 cells into mines,
+        // incrementing minesCount incorrectly and causing the flag counter to be wrong.
+        for (let x = 0; x < this.cols; x++) {
+            forbiddenSet.add(`${x},0`);
+        }
     } else {
         forbiddenSet = this.generateOrganicSafeZone(safeX, safeY);
     }
