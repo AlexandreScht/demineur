@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
 
 jobs:
   # ------------------------------------------------------------------
@@ -14,6 +16,7 @@ jobs:
   build_client:
     name: Build & Check Client
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,6 +59,7 @@ jobs:
   build_server:
     name: Check Server
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -75,21 +79,16 @@ jobs:
         working-directory: ./server
         run: pnpm install
 
-      # Add testing script here if you implement tests in the future
-      # - name: Test Server
-      #   working-directory: ./server
-      #   run: pnpm test
-
   # ------------------------------------------------------------------
   # CD: TEST DB MIGRATION & DEPLOY SERVER (Render)
   # ------------------------------------------------------------------
   deploy_server:
-    name: Test Migration & Deploy
+    name: Test Migration & Deploy Server
     needs: [build_client, build_server]
     runs-on: ubuntu-latest
     environment: Production
+    if: github.event_name != 'schedule'
 
-    # Création d'une base de données PostgreSQL locale éphémère
     services:
       postgres:
         image: postgres:15
@@ -124,17 +123,13 @@ jobs:
         working-directory: ./server
         run: pnpm install
 
-      - name: Clone Prod DB (pg_dump)
+      - name: Create Schema on Ephemeral DB (current prod state)
+        working-directory: ./server
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: pg_dump "$DATABASE_URL" -O -x -c > prod_clone.sql
+          DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
+        run: pnpm run db:push
 
-      - name: Restore to Local DB
-        env:
-          LOCAL_DB_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
-        run: psql "$LOCAL_DB_URL" < prod_clone.sql
-
-      - name: Test Database Migration
+      - name: Test Database Migration (new changes)
         working-directory: ./server
         env:
           DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
@@ -149,4 +144,75 @@ jobs:
             exit 0
           fi
           curl -X POST "$deploy_url"
-          echo "Render deploy triggered successfully."
+          echo "✅ Render deploy triggered successfully."
+
+  # ------------------------------------------------------------------
+  # CD: DEPLOY CLIENT (Vercel) — uniquement si server deploy réussi
+  # ------------------------------------------------------------------
+  deploy_client:
+    name: Deploy Client to Vercel
+    needs: [deploy_server]
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Trigger Vercel Deploy Hook
+        env:
+          deploy_url: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$deploy_url" ]; then
+            echo "VERCEL_DEPLOY_HOOK secret not set. Skipping deploy."
+            exit 0
+          fi
+          curl -X POST "$deploy_url"
+          echo "✅ Vercel deploy triggered successfully."
+
+  # ------------------------------------------------------------------
+  # KEEP-ALIVE: Test Supabase connection then ping
+  # ------------------------------------------------------------------
+  test_supabase_connection:
+    name: Test Supabase Connection
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    outputs:
+      reachable: ${{ steps.check.outputs.reachable }}
+    steps:
+      - name: Check Supabase connectivity
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+
+          echo "HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ Supabase is reachable"
+            echo "reachable=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Supabase returned status $HTTP_STATUS"
+            echo "reachable=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  keep_alive:
+    name: Keep Supabase Alive
+    needs: test_supabase_connection
+    runs-on: ubuntu-latest
+    environment: Production
+    if: needs.test_supabase_connection.outputs.reachable == 'true'
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -s "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+          echo "✅ Supabase pinged successfully"
