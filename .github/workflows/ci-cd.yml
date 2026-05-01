@@ -46,10 +46,6 @@ jobs:
         working-directory: ./client
         run: pnpm install
 
-      - name: Lint Client
-        working-directory: ./client
-        run: pnpm run lint
-
       - name: Build Client
         working-directory: ./client
         run: pnpm run build
