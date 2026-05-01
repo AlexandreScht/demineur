@@ -80,10 +80,10 @@ jobs:
         run: pnpm install
 
   # ------------------------------------------------------------------
-  # CD: TEST DB MIGRATION & DEPLOY SERVER (Render)
+  # CD: TEST DB MIGRATION — sur main uniquement
   # ------------------------------------------------------------------
-  deploy_server:
-    name: Test Migration & Deploy Server
+  test_migration:
+    name: Test Database Migration
     needs: [build_client, build_server]
     runs-on: ubuntu-latest
     environment: Production
@@ -135,6 +135,16 @@ jobs:
           DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/testdb
         run: pnpm run db:migrate
 
+  # ------------------------------------------------------------------
+  # CD: DEPLOY SERVER (Render) — uniquement si migration réussie
+  # ------------------------------------------------------------------
+  deploy_server:
+    name: Deploy Server to Render
+    needs: [test_migration]
+    runs-on: ubuntu-latest
+    environment: Production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
       - name: Trigger Render Deploy Hook
         env:
           deploy_url: ${{ secrets.RENDER_DEPLOY_HOOK }}
