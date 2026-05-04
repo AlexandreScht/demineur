@@ -9,7 +9,7 @@ import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
 import RangeSlider from '@/components/ui/RangeSlider';
 import SocialDrawer from '@/components/SocialDrawer';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, Crosshair } from 'lucide-react';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, MousePointer2 } from 'lucide-react';
 
 const ACCOUNTS_KEY = 'minesweeper_accounts';
 const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
@@ -70,10 +70,11 @@ export default function Home() {
   const [scansAvailable, setScansAvailable] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
 
-  // Mobile flag-mode toggle (tap = flag instead of reveal)
-  const [flagMode, setFlagMode] = useState(false);
+  // Mobile-only: toggle between reveal-on-tap and flag-on-tap
+  const [mobileFlagMode, setMobileFlagMode] = useState(false);
+  const flagToggleRef = useRef<HTMLButtonElement>(null);
 
-  // Board ref for measuring
+  // Board height measured from DOM so it always matches actual cell size
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardInnerH, setBoardInnerH] = useState(0);
 
@@ -448,6 +449,29 @@ export default function Home() {
     ro.observe(boardRef.current);
     return () => ro.disconnect();
   }, [grid, inRoom]);
+
+  // Keep the floating mobile flag-toggle button pinned to the visible viewport,
+  // so pinch-zooming doesn't push it off-screen.
+  useEffect(() => {
+    if (!inRoom) return;
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const update = () => {
+      const btn = flagToggleRef.current;
+      if (!btn) return;
+      const rightOffset = Math.max(0, window.innerWidth - (vv.offsetLeft + vv.width));
+      const bottomOffset = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+      btn.style.right = `calc(max(1rem, env(safe-area-inset-right)) + ${rightOffset}px)`;
+      btn.style.bottom = `calc(max(1rem, env(safe-area-inset-bottom)) + ${bottomOffset}px)`;
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [inRoom]);
 
   // === Account picker handlers ===
   const handleCreateAccount = () => {
@@ -930,7 +954,7 @@ export default function Home() {
                                     onClick={() => setCustomAllowLying(!customAllowLying)}
                                     className={`relative w-12 h-7 rounded-full transition-all border ${
                                         customAllowLying
-                                            ? 'bg-gradient-to-r from-cyan-400 to-violet-400 border-white/20 shadow-[0_0_12px_rgba(56,189,248,0.5)]'
+                                            ? 'bg-linear-to-r from-cyan-400 to-violet-400 border-white/20 shadow-[0_0_12px_rgba(56,189,248,0.5)]'
                                             : 'bg-white/10 border-white/15'
                                     }`}
                                 >
@@ -1030,33 +1054,33 @@ export default function Home() {
 
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header className="w-full flex justify-between items-center mb-2 md:mb-6 px-1 md:px-2 max-w-7xl mx-auto gap-1 md:gap-3">
+      <header className="w-full flex justify-between items-center mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3">
 
           {/* ── Left HUD Bar ── */}
-          <div className="flex items-stretch bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 shadow-md shadow-black/40 overflow-hidden">
+          <div className="flex items-stretch bg-slate-900/90 rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
 
              {/* MENU */}
              <button
                 onClick={leaveRoom}
-                className="flex items-center gap-1 md:gap-2 px-2 md:px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
+                className="flex items-center gap-2 px-2.5 sm:px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
                 title="Back to menu"
              >
-                <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span className="text-[10px] md:text-[11px] font-bold tracking-widest uppercase hidden sm:inline">Menu</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline text-[11px] font-bold tracking-widest uppercase">Menu</span>
              </button>
 
              {/* Level (hardcore) — amber accent */}
              {setupMode === 'hardcore' && (
-                 <div className="relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50">
-                     <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-400" />
-                     <span className="text-white font-mono font-bold text-xs md:text-sm tabular-nums">{score + 1}</span>
+                 <div className="relative flex items-center gap-2 px-2.5 sm:px-4 border-r border-slate-700/50">
+                     <Trophy className="w-4 h-4 text-amber-400" />
+                     <span className="text-white font-mono font-bold text-sm tabular-nums">{score + 1}</span>
                      <span className="text-slate-500 text-[10px] font-semibold uppercase hidden sm:block">Lv</span>
                      <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-amber-400" />
                  </div>
              )}
 
              {/* Mine Counter — rose accent when negative */}
-             <div className={`relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 ${
+             <div className={`relative flex items-center gap-2 px-2.5 sm:px-4 border-r border-slate-700/50 ${
                  remainingMines < 0 ? 'bg-rose-500/10' : ''
              }`}>
                  <FlagIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${remainingMines < 0 ? 'text-rose-400 fill-rose-400' : 'text-rose-400/70 fill-rose-400/30'}`} />
@@ -1073,7 +1097,7 @@ export default function Home() {
                  onClick={() => scansAvailable > 0 && setIsScanning(!isScanning)}
                  disabled={scansAvailable <= 0}
                  title="Scanner Tool"
-                 className={`relative flex hover:cursor-pointer items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 transition-colors ${
+                 className={`relative flex hover:cursor-pointer items-center gap-2 px-2.5 sm:px-4 border-r border-slate-700/50 transition-colors ${
                      isScanning
                          ? 'bg-emerald-500/10 text-emerald-200'
                          : scansAvailable > 0
@@ -1088,38 +1112,22 @@ export default function Home() {
                  )}
              </button>
 
-             {/* Mobile-only: Flag / Reveal toggle */}
-             <button
-                 onClick={() => setFlagMode(!flagMode)}
-                 title={flagMode ? 'Mode Drapeau (tap = flag)' : 'Mode Révéler (tap = reveal)'}
-                 className={`relative flex md:hidden items-center gap-1 px-2 border-r border-slate-700/50 transition-colors ${
-                     flagMode
-                         ? 'bg-rose-500/15 text-rose-300'
-                         : 'text-slate-300 hover:text-white'
-                 }`}
-             >
-                 {flagMode
-                     ? <FlagIcon className="w-3.5 h-3.5 text-rose-400 fill-rose-400/40" />
-                     : <Crosshair className="w-3.5 h-3.5" />
-                 }
-             </button>
-
-             {/* Room ID */}
+             {/* Room ID — visible on every viewport so phones can copy/share */}
              <button
                  onClick={handleCopyRoomId}
-                 className="hidden md:flex hover:cursor-pointer items-center gap-2 px-4 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                 className="flex hover:cursor-pointer items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors min-w-0"
                  title="Copy Room ID"
              >
                  {copied
-                     ? <Check className="w-4 h-4 text-emerald-400" />
-                     : <Copy className="w-4 h-4" />
+                     ? <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                     : <Copy className="w-4 h-4 shrink-0" />
                  }
-                 <span className="font-mono font-bold text-sm tracking-widest">{roomId}</span>
+                 <span className="font-mono font-bold text-xs sm:text-sm tracking-wider sm:tracking-widest truncate">{roomId}</span>
              </button>
           </div>
 
           {/* ── Right: Hearts ── */}
-          <div className="flex items-center gap-1 bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 px-2 md:px-3.5 shadow-md shadow-black/40">
+          <div className="flex items-center gap-1 bg-slate-900/90 rounded-2xl border border-slate-600/40 h-11 px-2.5 sm:px-3.5 shadow-md shadow-black/40 shrink-0">
               {[...Array(3)].map((_, i) => (
                   <div
                      key={i}
@@ -1149,9 +1157,12 @@ export default function Home() {
                 className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-80px)] md:max-h-none"
                 style={{ width: `min(${boardMaxW}px, 98vw)` }}
             >
+                {/* Inner clip: only constrain height + clip during the level-up slide
+                    animation. At rest we let the grid size itself naturally so pinch-zoom
+                    can't accidentally clip it via a stale measured height. */}
                 <div
                     className="relative"
-                    style={{ minWidth: boardCols > 10 ? `${boardCols * 32 + (boardCols - 1) * 2}px` : undefined }}
+                    style={isTransitioning ? { overflow: 'hidden', height: boardInnerH || undefined } : undefined}
                 >
                     <motion.div
                         className={`w-full ${isTransitioning ? 'pointer-events-none' : ''}`}
@@ -1167,7 +1178,7 @@ export default function Home() {
                             myRole={myRole}
                             isScanning={isScanning}
                             onScan={() => setIsScanning(false)}
-                            flagMode={flagMode}
+                            mobileFlagMode={mobileFlagMode}
                         />
                     </motion.div>
                 </div>
@@ -1178,6 +1189,31 @@ export default function Home() {
          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
          Serveur : Connecté
       </div>
+
+      {/* ── Mobile-only flag/click toggle ── always pinned to the visible
+          viewport corner via visualViewport tracking, with safe-area insets
+          so it stays clear of phone notches & rounded corners. */}
+      {!isGameOver && !isGameWon && (
+        <button
+          ref={flagToggleRef}
+          onClick={() => setMobileFlagMode(m => !m)}
+          aria-pressed={mobileFlagMode}
+          title={mobileFlagMode ? 'Tap = place flag' : 'Tap = reveal cell'}
+          className={`md:hidden fixed z-50 w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+              mobileFlagMode
+                  ? 'border-rose-300/40 shadow-[0_0_20px_-4px_rgba(251,113,133,0.55)]'
+                  : 'border-cyan-300/30 shadow-[0_0_20px_-6px_rgba(56,189,248,0.45)]'
+          }`}
+          style={{
+              right: 'max(1rem, env(safe-area-inset-right))',
+              bottom: 'max(1rem, env(safe-area-inset-bottom))',
+          }}
+        >
+          {mobileFlagMode
+              ? <FlagIcon className="w-6 h-6 text-rose-300 fill-rose-300/40" />
+              : <MousePointer2 className="w-6 h-6 text-cyan-accent" />}
+        </button>
+      )}
 
        {/* GAME OVER OVERLAY */}
        <AnimatePresence>

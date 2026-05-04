@@ -14,53 +14,77 @@ interface GridProps {
   onScan: () => void;
   myRole?: 'P1' | 'P2' | null;
   skipRows?: number[];
-  /** Mobile flag-mode: tap places a flag instead of revealing */
-  flagMode?: boolean;
+  mobileFlagMode?: boolean;
 }
 
-const LONG_PRESS_MS = 350;
-
-const Cell = ({
-    cell,
-    onClick,
-    onRightClick,
-    onLongPress,
-}: {
+interface CellProps {
     cell: CellData;
     onClick: () => void;
     onRightClick: (e: React.MouseEvent) => void;
+    onTap: () => void;
     onLongPress: () => void;
-}) => {
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const didLongPress = useRef(false);
+}
 
-    // ── Touch handlers for long-press flag on mobile ──
-    const handleTouchStart = useCallback(() => {
-        didLongPress.current = false;
-        timerRef.current = setTimeout(() => {
-            didLongPress.current = true;
+const LONG_PRESS_MS = 380;
+const MOVE_TOLERANCE_PX = 10;
+
+const Cell = ({ cell, onClick, onRightClick, onTap, onLongPress }: CellProps) => {
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const longPressFiredRef = useRef(false);
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+    const clearLongPressTimer = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length !== 1) {
+            clearLongPressTimer();
+            touchStartRef.current = null;
+            return;
+        }
+        longPressFiredRef.current = false;
+        const t = e.touches[0];
+        touchStartRef.current = { x: t.clientX, y: t.clientY };
+        longPressTimerRef.current = setTimeout(() => {
+            longPressFiredRef.current = true;
             onLongPress();
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                try { navigator.vibrate(35); } catch {}
+            }
         }, LONG_PRESS_MS);
-    }, [onLongPress]);
+    };
 
-    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!touchStartRef.current) return;
+        const t = e.touches[0];
+        const dx = t.clientX - touchStartRef.current.x;
+        const dy = t.clientY - touchStartRef.current.y;
+        if (Math.hypot(dx, dy) > MOVE_TOLERANCE_PX) {
+            clearLongPressTimer();
+            touchStartRef.current = null;
         }
-        // If a long-press already fired, suppress the click
-        if (didLongPress.current) {
-            e.preventDefault();
-        }
-    }, []);
+    };
 
-    const handleTouchMove = useCallback(() => {
-        // Cancel long-press if finger moves
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        const wasTouching = touchStartRef.current !== null;
+        clearLongPressTimer();
+        touchStartRef.current = null;
+        if (!wasTouching) return;
+        // Always preventDefault so the synthesized mouse click is suppressed
+        e.preventDefault();
+        if (!longPressFiredRef.current) {
+            onTap();
         }
-    }, []);
+    };
+
+    const handleTouchCancel = () => {
+        clearLongPressTimer();
+        touchStartRef.current = null;
+    };
 
     let content = null;
     // Closed cell — solid raised slate tile with subtle top highlight (frosted but opaque)
@@ -118,18 +142,19 @@ const Cell = ({
 
     return (
         <motion.div
-            layout
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className={cn(
                 "w-full aspect-square border rounded-md flex items-center justify-center cursor-pointer select-none transition-colors duration-100",
                 styleClass
             )}
+            style={{ touchAction: 'manipulation' }}
             onClick={onClick}
             onContextMenu={onRightClick}
             onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
             whileHover={{ scale: 1.06, zIndex: 10 }}
             whileTap={{ scale: 0.94 }}
         >
@@ -138,7 +163,7 @@ const Cell = ({
     );
 };
 
-export default function Grid({ grid, roomId, isScanning, onScan, skipRows, flagMode }: GridProps) {
+export default function Grid({ grid, roomId, isScanning, onScan, skipRows, mobileFlagMode }: GridProps) {
     const [cursors, setCursors] = useState<{ [id: string]: { x: number, y: number, role: 'P1'|'P2' } }>({});
     const lastEmit = useRef(0);
     const [isMobile, setIsMobile] = useState(false);
@@ -185,7 +210,8 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows, flagM
         socket.emit('cursor_leave', { roomId });
     };
 
-    const handleCellClick = (x: number, y: number) => {
+    // Desktop mouse: left-click reveals (or scans), right-click flags. (Unchanged.)
+    const handleMouseClick = (x: number, y: number) => {
         if (isScanning) {
             socket.emit('scan_cell', { x, y, roomId });
             onScan();
@@ -202,7 +228,31 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows, flagM
         socket.emit('flag_cell', { x, y, roomId });
     };
 
-    const handleLongPress = (x: number, y: number) => {
+    // Mobile touch: short tap respects mobileFlagMode AND never reveals a flagged cell —
+    // a tap on a flag/question simply cycles its state without opening the cell.
+    const handleTouchTap = (cell: CellData, x: number, y: number) => {
+        if (isScanning) {
+            socket.emit('scan_cell', { x, y, roomId });
+            onScan();
+            return;
+        }
+        if (cell.isOpen) return;
+        if (cell.flag !== 0) {
+            // Cycle flag state on a flagged/question cell — never reveal.
+            socket.emit('flag_cell', { x, y, roomId });
+            return;
+        }
+        if (mobileFlagMode) {
+            socket.emit('flag_cell', { x, y, roomId });
+        } else {
+            socket.emit('click_cell', { x, y, roomId });
+        }
+    };
+
+    // Mobile long-press: always places/cycles a flag on a closed cell.
+    const handleTouchLongPress = (cell: CellData, x: number, y: number) => {
+        if (cell.isOpen) return;
+        if (isScanning) return;
         socket.emit('flag_cell', { x, y, roomId });
     };
 
@@ -226,9 +276,10 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows, flagM
                         <Cell
                             key={`${x}-${y}`}
                             cell={cell}
-                            onClick={() => handleCellClick(x, y)}
+                            onClick={() => handleMouseClick(x, y)}
                             onRightClick={(e) => handleRightClick(e, x, y)}
-                            onLongPress={() => handleLongPress(x, y)}
+                            onTap={() => handleTouchTap(cell, x, y)}
+                            onLongPress={() => handleTouchLongPress(cell, x, y)}
                         />
                     ))
                 ))}
