@@ -195,17 +195,21 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 15 \
             "$SUPABASE_URL/rest/v1/" \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY")
 
           echo "HTTP Status: $HTTP_STATUS"
 
-          if [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "✅ Supabase is reachable"
+          # Any response (2xx–4xx) means the server is alive and reachable.
+          # 401 is expected when hitting /rest/v1/ without a table — it's not an outage.
+          # Only 5xx, 000 (timeout/DNS), or connection failures indicate a real problem.
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 500 ]; then
+            echo "✅ Supabase is reachable (HTTP $HTTP_STATUS)"
             echo "reachable=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ Supabase returned status $HTTP_STATUS"
+            echo "❌ Supabase unreachable or server error (HTTP $HTTP_STATUS)"
             echo "reachable=false" >> $GITHUB_OUTPUT
             exit 1
           fi
