@@ -75,8 +75,8 @@ export default function Home() {
   // Mobile-only: toggle between reveal-on-tap and flag-on-tap
   const [mobileFlagMode, setMobileFlagMode] = useState(false);
 
-  // Mobile-only: toggle HUD visibility
-  const [mobileHudVisible, setMobileHudVisible] = useState(true);
+  // Mobile-only: toggle minimap visibility
+  const [minimapVisible, setMinimapVisible] = useState(true);
 
   // Board height measured from DOM so it always matches actual cell size
   const boardRef = useRef<HTMLDivElement>(null);
@@ -1058,10 +1058,7 @@ export default function Home() {
 
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header
-        className="w-full flex justify-between items-center mb-3 md:mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3 sticky md:static top-0 z-30 py-2 md:py-0 mobile-hud-transition"
-        data-hud-hidden={!mobileHudVisible ? '' : undefined}
-      >
+      <header className="w-full flex justify-between items-center mb-3 md:mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3 sticky md:static top-0 z-30 py-2 md:py-0">
 
           {/* ── Left HUD Bar ── */}
           <div className="flex items-stretch bg-slate-900/55 md:bg-slate-900/90 backdrop-blur-md md:backdrop-blur-none rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
@@ -1194,8 +1191,8 @@ export default function Home() {
             </div>
        </div>
 
-      {/* Mobile minimap — auto-hides when the board fits the screen. */}
-      {!isGameOver && !isGameWon && grid.length > 0 && (
+      {/* Mobile minimap — auto-hides when the board fits the screen. Toggleable via Eye button. */}
+      {!isGameOver && !isGameWon && grid.length > 0 && minimapVisible && (
         <MiniMap grid={grid} scrollRef={boardRef} cellPitchPx={32} />
       )}
 
@@ -1215,18 +1212,18 @@ export default function Home() {
               bottom: 'max(1rem, env(safe-area-inset-bottom))',
           }}
         >
-          {/* HUD show/hide */}
+          {/* Minimap show/hide */}
           <button
-            onClick={() => setMobileHudVisible(v => !v)}
-            aria-pressed={mobileHudVisible}
-            title={mobileHudVisible ? 'Masquer le HUD' : 'Afficher le HUD'}
+            onClick={() => setMinimapVisible(v => !v)}
+            aria-pressed={minimapVisible}
+            title={minimapVisible ? 'Masquer la minimap' : 'Afficher la minimap'}
             className={`w-12 h-12 rounded-xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
-                mobileHudVisible
+                minimapVisible
                     ? 'border-slate-400/30 shadow-[0_0_14px_-4px_rgba(148,163,184,0.35)]'
                     : 'border-slate-500/20 shadow-[0_0_14px_-4px_rgba(100,116,139,0.25)]'
             }`}
           >
-            {mobileHudVisible
+            {minimapVisible
                 ? <EyeOff className="w-5 h-5 text-slate-300" />
                 : <Eye className="w-5 h-5 text-slate-400" />}
           </button>

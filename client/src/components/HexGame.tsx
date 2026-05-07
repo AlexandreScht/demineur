@@ -702,9 +702,8 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
   const [generating, setGenerating] = useState(false);
   const [presetActive, setPresetActive] = useState<Preset | null>("medium");
 
-  // Mobile-only states
+  // Mobile-only: toggle between reveal-on-tap and flag-on-tap
   const [mobileFlagMode, setMobileFlagMode] = useState(false);
-  const [mobileHudVisible, setMobileHudVisible] = useState(true);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lpRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -947,13 +946,10 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
         <div className="absolute bottom-[-10%] left-[25%] w-[40rem] h-[40rem] rounded-full bg-emerald-500/12 blur-[120px] animate-float-blob" style={{ animationDelay: "-9s" }} />
       </div>
 
-      {/* HUD — collapsible on mobile via mobileHudVisible */}
-      <div
-        className="w-full max-w-6xl mobile-hud-transition"
-        data-hud-hidden={!mobileHudVisible ? '' : undefined}
-      >
-        {/* Desktop HUD — existing capsule style */}
-        <div className="hidden md:flex hud-capsule hud-border-shimmer rounded-2xl px-4 py-3 items-center justify-between relative overflow-hidden mb-3">
+      {/* HUD */}
+      <div className="w-full max-w-6xl mb-2 md:mb-3">
+        {/* Desktop HUD — capsule style */}
+        <div className="hidden md:flex hud-capsule hud-border-shimmer rounded-2xl px-4 py-3 items-center justify-between relative overflow-hidden">
           <button
             onClick={onBack}
             className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-sm font-semibold"
@@ -977,64 +973,41 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        {/* Mobile HUD — classic bar style matching démineur */}
-        <div className="flex md:hidden justify-between items-center gap-2 mb-2 px-1 sticky top-0 z-30 py-2">
-          {/* Left bar */}
+        {/* Mobile HUD — compact bar */}
+        <div className="flex md:hidden justify-between items-center gap-2 sticky top-0 z-30 py-1">
           <div className="flex items-stretch bg-slate-900/55 backdrop-blur-md rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
-            {/* Back */}
             <button
               onClick={onBack}
               className="flex items-center gap-1 px-2.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            {/* Mine count */}
             <div className="flex items-center gap-1.5 px-2.5 border-r border-slate-700/50">
               <Bomb className="w-3.5 h-3.5 text-rose-400" />
               <span className="font-mono font-bold text-xs tabular-nums text-white">{minesLeft}</span>
             </div>
-            {/* Timer */}
-            <div className="flex items-center gap-1.5 px-2.5 border-r border-slate-700/50">
+            <div className="flex items-center gap-1.5 px-2.5">
               <Clock className="w-3.5 h-3.5 text-cyan-400" />
               <span className="font-mono font-bold text-xs tabular-nums text-cyan-300">{fmt(time)}</span>
             </div>
-            {/* Hint button */}
-            {settings.hintsCount > 0 && (
-              <button
-                onClick={useHint}
-                disabled={hintsLeft <= 0 || gameState !== "playing" || generating}
-                className={`flex items-center gap-1 px-2.5 transition-colors ${
-                  hintsLeft <= 0 || gameState !== "playing"
-                    ? "text-slate-600 cursor-not-allowed"
-                    : "text-amber-300 hover:text-amber-200 hover:bg-slate-800"
-                }`}
-              >
-                <Lightbulb className="w-3.5 h-3.5" />
-                <span className="font-mono font-bold text-xs tabular-nums">{hintsLeft}</span>
-              </button>
-            )}
           </div>
-          {/* Right: Hearts */}
           {settings.mistakesAllowed >= 0 && (
             <div className="flex items-center gap-1 bg-slate-900/55 backdrop-blur-md rounded-2xl border border-slate-600/40 h-11 px-2.5 shadow-md shadow-black/40 shrink-0">
               {Array.from({ length: settings.mistakesAllowed + 1 }, (_, i) => (
-                <Heart
-                  key={i}
-                  className={`w-3.5 h-3.5 fill-current ${i < livesRemaining ? "text-rose-400" : "text-slate-700"}`}
-                />
+                <Heart key={i} className={`w-3.5 h-3.5 fill-current ${i < livesRemaining ? "text-rose-400" : "text-slate-700"}`} />
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* Settings panel toggle — hidden on mobile */}
-      <div className="w-full max-w-6xl mb-3 hidden md:flex items-center gap-2 justify-center flex-wrap">
+      {/* Settings panel toggle */}
+      <div className="w-full max-w-6xl mb-2 md:mb-3 flex items-center gap-1.5 md:gap-2 justify-center flex-wrap px-1 md:px-0">
         {(["easy", "medium", "hard"] as Preset[]).map(d => (
           <button
             key={d}
             onClick={() => applyPreset(d)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wide transition-all glass-sheen ${
+            className={`px-2.5 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl text-[11px] md:text-xs font-bold uppercase tracking-wide transition-all glass-sheen ${
               presetActive === d
                 ? "glass-tint-violet text-violet-200 shadow-[0_0_20px_-5px_rgba(167,139,250,0.55)]"
                 : "glass text-slate-400 hover:text-slate-200"
@@ -1226,8 +1199,8 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
         )}
       </AnimatePresence>
 
-      {/* In-game tools row — hidden on mobile (hearts/hints in mobile HUD bar) */}
-      <div className="hidden md:flex items-center gap-3 mb-3 flex-wrap justify-center">
+      {/* In-game tools row */}
+      <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3 flex-wrap justify-center">
         {settings.mistakesAllowed >= 0 && (
           <span className="flex items-center gap-1 glass px-3 py-1.5 rounded-xl text-xs">
             {Array.from({ length: settings.mistakesAllowed + 1 }, (_, i) => (
@@ -1349,14 +1322,14 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
       <motion.div
         key={shakeKey}
         className={shakeKey > 0 ? "hex-board-shake" : ""}
-        style={{ maxWidth: `min(95vw, ${Math.max(svgW + 24, 480)}px)`, width: "100%" }}
+        style={{ maxWidth: `min(99vw, ${Math.max(svgW + 24, 480)}px)`, width: "100%" }}
       >
       <div
-        className="relative overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] w-full"
+        className="relative overflow-hidden rounded-xl md:rounded-2xl border border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] w-full"
       >
         {/* Animated gradient background — drifts top-left → bottom-right */}
         <div className="hex-board-bg absolute inset-0" style={{ borderRadius: "inherit" }} />
-        <div className="relative p-1 md:p-1.5">
+        <div className="relative p-0.5 md:p-1.5">
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
           preserveAspectRatio="xMidYMid meet"
@@ -1680,21 +1653,6 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
             bottom: 'max(1rem, env(safe-area-inset-bottom))',
           }}
         >
-          {/* HUD show/hide */}
-          <button
-            onClick={() => setMobileHudVisible(v => !v)}
-            aria-pressed={mobileHudVisible}
-            title={mobileHudVisible ? 'Masquer le HUD' : 'Afficher le HUD'}
-            className={`w-12 h-12 rounded-xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
-              mobileHudVisible
-                ? 'border-slate-400/30 shadow-[0_0_14px_-4px_rgba(148,163,184,0.35)]'
-                : 'border-slate-500/20 shadow-[0_0_14px_-4px_rgba(100,116,139,0.25)]'
-            }`}
-          >
-            {mobileHudVisible
-              ? <EyeOff className="w-5 h-5 text-slate-300" />
-              : <Eye className="w-5 h-5 text-slate-400" />}
-          </button>
           {/* Flag / Reveal toggle */}
           <button
             onClick={() => setMobileFlagMode(m => !m)}
