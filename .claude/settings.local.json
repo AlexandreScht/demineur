@@ -7,7 +7,12 @@
       "Bash(node -c ../server/index.js)",
       "Bash(node *)",
       "Bash(echo \"exit=$?\")",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(echo \"tsc=$?\")",
+      "Bash(echo \"eslint=$?\")",
+      "Bash(npx --prefix client tsc -p client --noEmit)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npm run *)"
     ]
   }
 }

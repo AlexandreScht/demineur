@@ -7,9 +7,11 @@ import { socket } from '@/utils/socket';
 import { GridData, CellData, GameInitData, Account, AccountInfo, IncomingJoinRequest, IncomingFriendRequest } from '@/utils/types';
 import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
+import MiniMap from '@/components/MiniMap';
 import RangeSlider from '@/components/ui/RangeSlider';
 import SocialDrawer from '@/components/SocialDrawer';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, MousePointer2 } from 'lucide-react';
+import HexGame from '@/components/HexGame';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, MousePointer2, Hexagon } from 'lucide-react';
 
 const ACCOUNTS_KEY = 'minesweeper_accounts';
 const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
@@ -72,11 +74,13 @@ export default function Home() {
 
   // Mobile-only: toggle between reveal-on-tap and flag-on-tap
   const [mobileFlagMode, setMobileFlagMode] = useState(false);
-  const flagToggleRef = useRef<HTMLButtonElement>(null);
 
   // Board height measured from DOM so it always matches actual cell size
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardInnerH, setBoardInnerH] = useState(0);
+
+  // Hexcells solo mode (client-side, no socket)
+  const [hexMode, setHexMode] = useState(false);
 
   // Mobile social drawer on home page
   const [homeSocialOpen, setHomeSocialOpen] = useState(false);
@@ -450,29 +454,6 @@ export default function Home() {
     return () => ro.disconnect();
   }, [grid, inRoom]);
 
-  // Keep the floating mobile flag-toggle button pinned to the visible viewport,
-  // so pinch-zooming doesn't push it off-screen.
-  useEffect(() => {
-    if (!inRoom) return;
-    if (typeof window === 'undefined' || !window.visualViewport) return;
-    const vv = window.visualViewport;
-    const update = () => {
-      const btn = flagToggleRef.current;
-      if (!btn) return;
-      const rightOffset = Math.max(0, window.innerWidth - (vv.offsetLeft + vv.width));
-      const bottomOffset = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
-      btn.style.right = `calc(max(1rem, env(safe-area-inset-right)) + ${rightOffset}px)`;
-      btn.style.bottom = `calc(max(1rem, env(safe-area-inset-bottom)) + ${bottomOffset}px)`;
-    };
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-    };
-  }, [inRoom]);
-
   // === Account picker handlers ===
   const handleCreateAccount = () => {
       const trimmed = newPseudoInput.trim();
@@ -630,6 +611,14 @@ export default function Home() {
   ) : null;
 
   if (!inRoom) {
+    if (hexMode) {
+      return (
+        <main className="flex min-h-screen text-white relative overflow-hidden">
+          <HexGame onBack={() => setHexMode(false)} />
+        </main>
+      );
+    }
+
     return (
       <main className="flex min-h-screen text-white relative overflow-hidden">
         {/* Floating ambient blobs */}
@@ -849,6 +838,18 @@ export default function Home() {
                         <span className="text-slate-300/70 text-sm relative z-10">Incertitude &amp; Chiffres ambigus.</span>
                     </button>
 
+                    {/* HEXCELLS MODE */}
+                    <button
+                        onClick={() => setHexMode(true)}
+                        className="group relative px-8 py-7 glass glass-sheen glass-tint-mint rounded-3xl hover:shadow-[0_0_50px_-10px_rgba(52,211,153,0.5)] hover:border-emerald-300/50 transition-all flex flex-col items-center gap-2 overflow-hidden"
+                    >
+                        <div className="flex items-center gap-3 relative z-10">
+                            <Hexagon className="w-7 h-7 text-mint-accent drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                            <span className="text-2xl font-bold text-white tracking-wide">HEXCELLS</span>
+                        </div>
+                        <span className="text-slate-300/70 text-sm relative z-10">Puzzle logique · Grille hexagonale.</span>
+                    </button>
+
                     {/* JOIN ROOM */}
                     <div className="flex gap-2 w-full mt-6">
                         <input
@@ -994,8 +995,8 @@ export default function Home() {
                         onClick={startGame}
                         className={`w-full py-4 mt-2 rounded-2xl font-bold text-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] glass-sheen ${
                             setupMode === 'classic'
-                            ? 'bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]'
-                            : 'bg-gradient-to-r from-violet-300 to-fuchsia-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(167,139,250,0.6)]'
+                            ? 'bg-linear-to-r from-cyan-300 to-sky-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]'
+                            : 'bg-linear-to-r from-violet-300 to-fuchsia-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(167,139,250,0.6)]'
                         }`}
                     >
                         START GAME
@@ -1029,7 +1030,7 @@ export default function Home() {
                 >
                     <Users className="w-5 h-5 text-cyan-accent" />
                     {(incomingRequests.length + incomingFriendRequests.length) > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-gradient-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
+                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-linear-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
                             {incomingRequests.length + incomingFriendRequests.length}
                         </span>
                     )}
@@ -1054,10 +1055,10 @@ export default function Home() {
 
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header className="w-full flex justify-between items-center mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3">
+      <header className="w-full flex justify-between items-center mb-3 md:mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3 sticky md:static top-0 z-30 py-2 md:py-0">
 
           {/* ── Left HUD Bar ── */}
-          <div className="flex items-stretch bg-slate-900/90 rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
+          <div className="flex items-stretch bg-slate-900/55 md:bg-slate-900/90 backdrop-blur-md md:backdrop-blur-none rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
 
              {/* MENU */}
              <button
@@ -1127,7 +1128,7 @@ export default function Home() {
           </div>
 
           {/* ── Right: Hearts ── */}
-          <div className="flex items-center gap-1 bg-slate-900/90 rounded-2xl border border-slate-600/40 h-11 px-2.5 sm:px-3.5 shadow-md shadow-black/40 shrink-0">
+          <div className="flex items-center gap-1 bg-slate-900/55 md:bg-slate-900/90 backdrop-blur-md md:backdrop-blur-none rounded-2xl border border-slate-600/40 h-11 px-2.5 sm:px-3.5 shadow-md shadow-black/40 shrink-0">
               {[...Array(3)].map((_, i) => (
                   <div
                      key={i}
@@ -1150,12 +1151,14 @@ export default function Home() {
       </header>
 
        {/* GAME BOARD WINDOW */}
-       <div className="w-full flex justify-center">
-            {/* Glass shell — on mobile, allow scroll in both directions instead of squishing */}
+       <div className="w-full flex justify-center px-3 sm:px-0">
+            {/* Glass shell — on mobile, allow scroll in both directions instead of squishing.
+                Width is capped to (100vw - 32px) on phones so the board has clear margin
+                from the screen edges and never overflows the parent padding. */}
             <div
                 ref={boardRef}
-                className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-80px)] md:max-h-none"
-                style={{ width: `min(${boardMaxW}px, 98vw)` }}
+                className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-160px)] md:max-h-none"
+                style={{ width: `min(${boardMaxW}px, calc(100vw - 50px))`, touchAction: 'pan-x pan-y' }}
             >
                 {/* Inner clip: only constrain height + clip during the level-up slide
                     animation. At rest we let the grid size itself naturally so pinch-zoom
@@ -1185,21 +1188,24 @@ export default function Home() {
             </div>
        </div>
 
+      {/* Mobile minimap — auto-hides when the board fits the screen. */}
+      {!isGameOver && !isGameWon && grid.length > 0 && (
+        <MiniMap grid={grid} scrollRef={boardRef} cellPitchPx={32} />
+      )}
+
       <div className="hidden md:flex fixed bottom-4 right-4 text-xs text-slate-500 items-center gap-2 glass px-3 py-1.5 rounded-full">
          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
          Serveur : Connecté
       </div>
 
-      {/* ── Mobile-only flag/click toggle ── always pinned to the visible
-          viewport corner via visualViewport tracking, with safe-area insets
-          so it stays clear of phone notches & rounded corners. */}
+      {/* ── Mobile-only flag/click toggle ── plain fixed bottom-right with
+          safe-area-inset so it sits clear of phone notches/rounded corners. */}
       {!isGameOver && !isGameWon && (
         <button
-          ref={flagToggleRef}
           onClick={() => setMobileFlagMode(m => !m)}
           aria-pressed={mobileFlagMode}
           title={mobileFlagMode ? 'Tap = place flag' : 'Tap = reveal cell'}
-          className={`md:hidden fixed z-50 w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+          className={`md:hidden fixed bottom-4 right-4 z-50 w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
               mobileFlagMode
                   ? 'border-rose-300/40 shadow-[0_0_20px_-4px_rgba(251,113,133,0.55)]'
                   : 'border-cyan-300/30 shadow-[0_0_20px_-6px_rgba(56,189,248,0.45)]'

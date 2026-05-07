@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { CellData, GridData } from '@/utils/types';
 import { socket } from '@/utils/socket';
@@ -210,13 +210,14 @@ export default function Grid({ grid, roomId, isScanning, onScan, skipRows, mobil
         socket.emit('cursor_leave', { roomId });
     };
 
-    // Desktop mouse: left-click reveals (or scans), right-click flags. (Unchanged.)
+    // Desktop mouse: left-click reveals (or scans). On mobile devices that
+    // synthesize click events (rare since touchend preventDefault suppresses them),
+    // honour the flag-mode toggle so tapping flags instead of revealing.
     const handleMouseClick = (x: number, y: number) => {
         if (isScanning) {
             socket.emit('scan_cell', { x, y, roomId });
             onScan();
-        } else if (flagMode) {
-            // Mobile flag-mode: tap = flag
+        } else if (isMobile && mobileFlagMode) {
             socket.emit('flag_cell', { x, y, roomId });
         } else {
             socket.emit('click_cell', { x, y, roomId });

@@ -29,9 +29,16 @@ html, body {
   background: var(--bg-base);
   color: var(--foreground);
   min-height: 100vh;
+  /* `manipulation` disables double-tap-to-zoom (eliminates the 300ms click
+     delay) while still allowing pan and pinch-zoom. Never use pan-x pan-y
+     alone on the root — it re-introduces the 300ms delay and breaks tap
+     events on some Android browsers. Pinch-zoom on the game grid is handled
+     at the element level via touch-action: none / pan-x pan-y on specific
+     containers. */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Ambient global background with soft color blobs */
@@ -236,6 +243,25 @@ body::after {
   60% { transform: scale(1); }
 }
 .animate-heartbeat { animation: heartbeat 2.5s ease-in-out infinite; }
+
+/* === Hex board animated gradient background === */
+@keyframes hex-board-drift {
+  0%   { background-position: 0% 0%; }
+  50%  { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+.hex-board-bg {
+  background: linear-gradient(
+    135deg,
+    #131c30 0%,
+    #0e1828 25%,
+    #111b2e 50%,
+    #0c1422 75%,
+    #080e1c 100%
+  );
+  background-size: 300% 300%;
+  animation: hex-board-drift 18s ease-in-out infinite;
+}
 
 /* Hide scrollbars */
 .no-scrollbar::-webkit-scrollbar { display: none; }
