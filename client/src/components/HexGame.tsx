@@ -1342,18 +1342,12 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
         style={{ touchAction: 'pan-x pan-y' }}
       >
         {/* Animated gradient background — drifts top-left → bottom-right */}
-        <div className="hex-board-bg absolute inset-0 pointer-events-none" style={{ borderRadius: "inherit", minWidth: isMobile ? svgW * 1.2 + 12 : undefined, minHeight: isMobile ? svgH * 1.2 + 12 : undefined }} />
+        <div className="hex-board-bg absolute inset-0 pointer-events-none" style={{ borderRadius: "inherit", minWidth: isMobile ? svgW + 4 : undefined, minHeight: isMobile ? svgH + 4 : undefined }} />
         <div className="relative p-0.5 md:p-1.5">
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
           preserveAspectRatio="xMidYMid meet"
-          style={{
-            width: isMobile ? Math.max(svgW * 1.2, 480) : "100%",
-            height: "auto",
-            display: "block",
-            touchAction: "pan-x pan-y",
-            minWidth: isMobile ? Math.max(svgW * 1.2, 480) : undefined,
-          }}
+          style={{ width: isMobile ? svgW : "100%", height: "auto", display: "block", touchAction: "pan-x pan-y", minWidth: isMobile ? svgW : undefined }}
           onContextMenu={e => e.preventDefault()}
         >
           <defs>
