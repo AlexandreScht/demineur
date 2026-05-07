@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, RotateCcw, Clock, Bomb, Lightbulb,
   Settings as SettingsIcon, Heart, Sparkles, Wand2, Loader2,
+  Eye, EyeOff, MousePointer2, Flag as FlagIcon, ArrowLeft,
 } from "lucide-react";
 import RangeSlider from "@/components/ui/RangeSlider";
 
@@ -701,6 +702,10 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
   const [generating, setGenerating] = useState(false);
   const [presetActive, setPresetActive] = useState<Preset | null>("medium");
 
+  // Mobile-only states
+  const [mobileFlagMode, setMobileFlagMode] = useState(false);
+  const [mobileHudVisible, setMobileHudVisible] = useState(true);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lpRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLP = useRef(false);
@@ -935,16 +940,20 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
   const livesRemaining = settings.mistakesAllowed < 0 ? -1 : Math.max(0, settings.mistakesAllowed - mistakes + 1);
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-4 pt-6 pb-10 w-full">
+    <div className="flex flex-col items-center min-h-screen p-2 pt-3 pb-20 md:p-4 md:pt-6 md:pb-10 w-full">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute top-[-10%] left-[-5%] w-[40rem] h-[40rem] rounded-full bg-violet-500/15 blur-[120px] animate-float-blob" />
         <div className="absolute top-[20%] right-[-10%] w-[35rem] h-[35rem] rounded-full bg-cyan-500/15 blur-[120px] animate-float-blob" style={{ animationDelay: "-5s" }} />
         <div className="absolute bottom-[-10%] left-[25%] w-[40rem] h-[40rem] rounded-full bg-emerald-500/12 blur-[120px] animate-float-blob" style={{ animationDelay: "-9s" }} />
       </div>
 
-      {/* HUD */}
-      <div className="w-full max-w-6xl mb-3">
-        <div className="hud-capsule hud-border-shimmer rounded-2xl px-4 py-3 flex items-center justify-between relative overflow-hidden">
+      {/* HUD — collapsible on mobile via mobileHudVisible */}
+      <div
+        className="w-full max-w-6xl mobile-hud-transition"
+        data-hud-hidden={!mobileHudVisible ? '' : undefined}
+      >
+        {/* Desktop HUD — existing capsule style */}
+        <div className="hidden md:flex hud-capsule hud-border-shimmer rounded-2xl px-4 py-3 items-center justify-between relative overflow-hidden mb-3">
           <button
             onClick={onBack}
             className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors text-sm font-semibold"
@@ -967,10 +976,60 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
             </span>
           </div>
         </div>
+
+        {/* Mobile HUD — classic bar style matching démineur */}
+        <div className="flex md:hidden justify-between items-center gap-2 mb-2 px-1 sticky top-0 z-30 py-2">
+          {/* Left bar */}
+          <div className="flex items-stretch bg-slate-900/55 backdrop-blur-md rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
+            {/* Back */}
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 px-2.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            {/* Mine count */}
+            <div className="flex items-center gap-1.5 px-2.5 border-r border-slate-700/50">
+              <Bomb className="w-3.5 h-3.5 text-rose-400" />
+              <span className="font-mono font-bold text-xs tabular-nums text-white">{minesLeft}</span>
+            </div>
+            {/* Timer */}
+            <div className="flex items-center gap-1.5 px-2.5 border-r border-slate-700/50">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-mono font-bold text-xs tabular-nums text-cyan-300">{fmt(time)}</span>
+            </div>
+            {/* Hint button */}
+            {settings.hintsCount > 0 && (
+              <button
+                onClick={useHint}
+                disabled={hintsLeft <= 0 || gameState !== "playing" || generating}
+                className={`flex items-center gap-1 px-2.5 transition-colors ${
+                  hintsLeft <= 0 || gameState !== "playing"
+                    ? "text-slate-600 cursor-not-allowed"
+                    : "text-amber-300 hover:text-amber-200 hover:bg-slate-800"
+                }`}
+              >
+                <Lightbulb className="w-3.5 h-3.5" />
+                <span className="font-mono font-bold text-xs tabular-nums">{hintsLeft}</span>
+              </button>
+            )}
+          </div>
+          {/* Right: Hearts */}
+          {settings.mistakesAllowed >= 0 && (
+            <div className="flex items-center gap-1 bg-slate-900/55 backdrop-blur-md rounded-2xl border border-slate-600/40 h-11 px-2.5 shadow-md shadow-black/40 shrink-0">
+              {Array.from({ length: settings.mistakesAllowed + 1 }, (_, i) => (
+                <Heart
+                  key={i}
+                  className={`w-3.5 h-3.5 fill-current ${i < livesRemaining ? "text-rose-400" : "text-slate-700"}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Settings panel toggle */}
-      <div className="w-full max-w-6xl mb-3 flex items-center gap-2 justify-center flex-wrap">
+      {/* Settings panel toggle — hidden on mobile */}
+      <div className="w-full max-w-6xl mb-3 hidden md:flex items-center gap-2 justify-center flex-wrap">
         {(["easy", "medium", "hard"] as Preset[]).map(d => (
           <button
             key={d}
@@ -1167,8 +1226,8 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
         )}
       </AnimatePresence>
 
-      {/* In-game tools row */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap justify-center">
+      {/* In-game tools row — hidden on mobile (hearts/hints in mobile HUD bar) */}
+      <div className="hidden md:flex items-center gap-3 mb-3 flex-wrap justify-center">
         {settings.mistakesAllowed >= 0 && (
           <span className="flex items-center gap-1 glass px-3 py-1.5 rounded-xl text-xs">
             {Array.from({ length: settings.mistakesAllowed + 1 }, (_, i) => (
@@ -1220,7 +1279,7 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
 
       {/* Legend — above the board */}
       <div
-        className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-3 text-sm text-slate-400 w-full"
+        className="hidden md:flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-3 text-sm text-slate-400 w-full"
         style={{ maxWidth: `min(95vw, ${Math.max(svgW + 24, 480)}px)` }}
       >
         <span className="flex items-center gap-2">
@@ -1445,7 +1504,10 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
                     onTouchEnd={e => {
                       e.preventDefault();
                       if (lpRef.current) clearTimeout(lpRef.current);
-                      if (!didLP.current && !tMoved.current) reveal(col, row);
+                      if (!didLP.current && !tMoved.current) {
+                        if (mobileFlagMode) flag(col, row);
+                        else reveal(col, row);
+                      }
                     }}
                   />
 
@@ -1528,9 +1590,9 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
       {/* New game */}
       <button
         onClick={() => reset()}
-        className="mt-4 glass glass-sheen px-5 py-2.5 rounded-2xl flex items-center gap-2 text-slate-300 hover:text-white text-sm font-semibold transition-all"
+        className="mt-2 md:mt-4 glass glass-sheen px-3 py-2 md:px-5 md:py-2.5 rounded-xl md:rounded-2xl flex items-center gap-2 text-slate-300 hover:text-white text-xs md:text-sm font-semibold transition-all"
       >
-        <RotateCcw className="w-4 h-4" />
+        <RotateCcw className="w-3.5 h-3.5 md:w-4 md:h-4" />
         Nouvelle partie
       </button>
 
@@ -1608,6 +1670,48 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Mobile-only controls: HUD toggle + flag/click toggle ── */}
+      {gameState !== "won" && gameState !== "lost" && (
+        <div
+          className="md:hidden fixed z-50 flex items-center gap-2"
+          style={{
+            right: 'max(1rem, env(safe-area-inset-right))',
+            bottom: 'max(1rem, env(safe-area-inset-bottom))',
+          }}
+        >
+          {/* HUD show/hide */}
+          <button
+            onClick={() => setMobileHudVisible(v => !v)}
+            aria-pressed={mobileHudVisible}
+            title={mobileHudVisible ? 'Masquer le HUD' : 'Afficher le HUD'}
+            className={`w-12 h-12 rounded-xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+              mobileHudVisible
+                ? 'border-slate-400/30 shadow-[0_0_14px_-4px_rgba(148,163,184,0.35)]'
+                : 'border-slate-500/20 shadow-[0_0_14px_-4px_rgba(100,116,139,0.25)]'
+            }`}
+          >
+            {mobileHudVisible
+              ? <EyeOff className="w-5 h-5 text-slate-300" />
+              : <Eye className="w-5 h-5 text-slate-400" />}
+          </button>
+          {/* Flag / Reveal toggle */}
+          <button
+            onClick={() => setMobileFlagMode(m => !m)}
+            aria-pressed={mobileFlagMode}
+            title={mobileFlagMode ? 'Tap = drapeau' : 'Tap = révéler'}
+            className={`w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+              mobileFlagMode
+                ? 'border-rose-300/40 shadow-[0_0_20px_-4px_rgba(251,113,133,0.55)]'
+                : 'border-cyan-300/30 shadow-[0_0_20px_-6px_rgba(56,189,248,0.45)]'
+            }`}
+          >
+            {mobileFlagMode
+              ? <FlagIcon className="w-6 h-6 text-rose-300 fill-rose-300/40" />
+              : <MousePointer2 className="w-6 h-6 text-cyan-accent" />}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

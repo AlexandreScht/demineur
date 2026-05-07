@@ -306,3 +306,20 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance
   outline: none;
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4), 0 0 20px rgba(56, 189, 248, 0.2);
 }
+
+/* ── Mobile HUD show/hide transition ── */
+.mobile-hud-transition {
+  transition: max-height 0.3s ease, opacity 0.25s ease, margin-bottom 0.3s ease, padding-top 0.3s ease, padding-bottom 0.3s ease;
+  max-height: 6rem;
+}
+@media (max-width: 767px) {
+  .mobile-hud-transition[data-hud-hidden] {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    pointer-events: none;
+  }
+}

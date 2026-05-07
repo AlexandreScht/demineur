@@ -11,7 +11,7 @@ import MiniMap from '@/components/MiniMap';
 import RangeSlider from '@/components/ui/RangeSlider';
 import SocialDrawer from '@/components/SocialDrawer';
 import HexGame from '@/components/HexGame';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, MousePointer2, Hexagon } from 'lucide-react';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, MousePointer2, Hexagon, Eye, EyeOff } from 'lucide-react';
 
 const ACCOUNTS_KEY = 'minesweeper_accounts';
 const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
@@ -74,6 +74,9 @@ export default function Home() {
 
   // Mobile-only: toggle between reveal-on-tap and flag-on-tap
   const [mobileFlagMode, setMobileFlagMode] = useState(false);
+
+  // Mobile-only: toggle HUD visibility
+  const [mobileHudVisible, setMobileHudVisible] = useState(true);
 
   // Board height measured from DOM so it always matches actual cell size
   const boardRef = useRef<HTMLDivElement>(null);
@@ -1055,7 +1058,10 @@ export default function Home() {
 
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header className="w-full flex justify-between items-center mb-3 md:mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3 sticky md:static top-0 z-30 py-2 md:py-0">
+      <header
+        className="w-full flex justify-between items-center mb-3 md:mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3 sticky md:static top-0 z-30 py-2 md:py-0 mobile-hud-transition"
+        data-hud-hidden={!mobileHudVisible ? '' : undefined}
+      >
 
           {/* ── Left HUD Bar ── */}
           <div className="flex items-stretch bg-slate-900/55 md:bg-slate-900/90 backdrop-blur-md md:backdrop-blur-none rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
@@ -1198,27 +1204,48 @@ export default function Home() {
          Serveur : Connecté
       </div>
 
-      {/* ── Mobile-only flag/click toggle ── plain fixed bottom-right with
-          safe-area-inset so it sits clear of phone notches/rounded corners. */}
+      {/* ── Mobile-only controls: flag/click toggle + HUD show/hide ──
+          Two buttons in a horizontal group, fixed bottom-right with safe-area-inset
+          so they sit clear of phone notches/rounded corners. */}
       {!isGameOver && !isGameWon && (
-        <button
-          onClick={() => setMobileFlagMode(m => !m)}
-          aria-pressed={mobileFlagMode}
-          title={mobileFlagMode ? 'Tap = place flag' : 'Tap = reveal cell'}
-          className={`md:hidden fixed bottom-4 right-4 z-50 w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
-              mobileFlagMode
-                  ? 'border-rose-300/40 shadow-[0_0_20px_-4px_rgba(251,113,133,0.55)]'
-                  : 'border-cyan-300/30 shadow-[0_0_20px_-6px_rgba(56,189,248,0.45)]'
-          }`}
+        <div
+          className="md:hidden fixed z-50 flex items-center gap-2"
           style={{
               right: 'max(1rem, env(safe-area-inset-right))',
               bottom: 'max(1rem, env(safe-area-inset-bottom))',
           }}
         >
-          {mobileFlagMode
-              ? <FlagIcon className="w-6 h-6 text-rose-300 fill-rose-300/40" />
-              : <MousePointer2 className="w-6 h-6 text-cyan-accent" />}
-        </button>
+          {/* HUD show/hide */}
+          <button
+            onClick={() => setMobileHudVisible(v => !v)}
+            aria-pressed={mobileHudVisible}
+            title={mobileHudVisible ? 'Masquer le HUD' : 'Afficher le HUD'}
+            className={`w-12 h-12 rounded-xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+                mobileHudVisible
+                    ? 'border-slate-400/30 shadow-[0_0_14px_-4px_rgba(148,163,184,0.35)]'
+                    : 'border-slate-500/20 shadow-[0_0_14px_-4px_rgba(100,116,139,0.25)]'
+            }`}
+          >
+            {mobileHudVisible
+                ? <EyeOff className="w-5 h-5 text-slate-300" />
+                : <Eye className="w-5 h-5 text-slate-400" />}
+          </button>
+          {/* Flag / Reveal toggle */}
+          <button
+            onClick={() => setMobileFlagMode(m => !m)}
+            aria-pressed={mobileFlagMode}
+            title={mobileFlagMode ? 'Tap = place flag' : 'Tap = reveal cell'}
+            className={`w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+                mobileFlagMode
+                    ? 'border-rose-300/40 shadow-[0_0_20px_-4px_rgba(251,113,133,0.55)]'
+                    : 'border-cyan-300/30 shadow-[0_0_20px_-6px_rgba(56,189,248,0.45)]'
+            }`}
+          >
+            {mobileFlagMode
+                ? <FlagIcon className="w-6 h-6 text-rose-300 fill-rose-300/40" />
+                : <MousePointer2 className="w-6 h-6 text-cyan-accent" />}
+          </button>
+        </div>
       )}
 
        {/* GAME OVER OVERLAY */}
