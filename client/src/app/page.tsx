@@ -7,9 +7,11 @@ import { socket } from '@/utils/socket';
 import { GridData, CellData, GameInitData, Account, AccountInfo, IncomingJoinRequest, IncomingFriendRequest } from '@/utils/types';
 import Grid from '@/components/Grid';
 import GameContainer from '@/components/GameContainer';
+import MiniMap from '@/components/MiniMap';
 import RangeSlider from '@/components/ui/RangeSlider';
 import SocialDrawer from '@/components/SocialDrawer';
-import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, Crosshair } from 'lucide-react';
+import HexGame from '@/components/HexGame';
+import { Activity, Zap, Heart, Flag as FlagIcon, Radar, Settings, ArrowLeft, Copy, Check, Trophy, UserPlus, X, Play, LogIn, User, Users, MailPlus, MousePointer2, Hexagon } from 'lucide-react';
 
 const ACCOUNTS_KEY = 'minesweeper_accounts';
 const ACTIVE_ACCOUNT_KEY = 'minesweeper_active_account';
@@ -70,12 +72,15 @@ export default function Home() {
   const [scansAvailable, setScansAvailable] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
 
-  // Mobile flag-mode toggle (tap = flag instead of reveal)
-  const [flagMode, setFlagMode] = useState(false);
+  // Mobile-only: toggle between reveal-on-tap and flag-on-tap
+  const [mobileFlagMode, setMobileFlagMode] = useState(false);
 
-  // Board ref for measuring
+  // Board height measured from DOM so it always matches actual cell size
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardInnerH, setBoardInnerH] = useState(0);
+
+  // Hexcells solo mode (client-side, no socket)
+  const [hexMode, setHexMode] = useState(false);
 
   // Mobile social drawer on home page
   const [homeSocialOpen, setHomeSocialOpen] = useState(false);
@@ -606,6 +611,14 @@ export default function Home() {
   ) : null;
 
   if (!inRoom) {
+    if (hexMode) {
+      return (
+        <main className="flex min-h-screen text-white relative overflow-hidden">
+          <HexGame onBack={() => setHexMode(false)} />
+        </main>
+      );
+    }
+
     return (
       <main className="flex min-h-screen text-white relative overflow-hidden">
         {/* Floating ambient blobs */}
@@ -825,6 +838,18 @@ export default function Home() {
                         <span className="text-slate-300/70 text-sm relative z-10">Incertitude &amp; Chiffres ambigus.</span>
                     </button>
 
+                    {/* HEXCELLS MODE */}
+                    <button
+                        onClick={() => setHexMode(true)}
+                        className="group relative px-8 py-7 glass glass-sheen glass-tint-mint rounded-3xl hover:shadow-[0_0_50px_-10px_rgba(52,211,153,0.5)] hover:border-emerald-300/50 transition-all flex flex-col items-center gap-2 overflow-hidden"
+                    >
+                        <div className="flex items-center gap-3 relative z-10">
+                            <Hexagon className="w-7 h-7 text-mint-accent drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                            <span className="text-2xl font-bold text-white tracking-wide">HEXCELLS</span>
+                        </div>
+                        <span className="text-slate-300/70 text-sm relative z-10">Puzzle logique · Grille hexagonale.</span>
+                    </button>
+
                     {/* JOIN ROOM */}
                     <div className="flex gap-2 w-full mt-6">
                         <input
@@ -930,7 +955,7 @@ export default function Home() {
                                     onClick={() => setCustomAllowLying(!customAllowLying)}
                                     className={`relative w-12 h-7 rounded-full transition-all border ${
                                         customAllowLying
-                                            ? 'bg-gradient-to-r from-cyan-400 to-violet-400 border-white/20 shadow-[0_0_12px_rgba(56,189,248,0.5)]'
+                                            ? 'bg-linear-to-r from-cyan-400 to-violet-400 border-white/20 shadow-[0_0_12px_rgba(56,189,248,0.5)]'
                                             : 'bg-white/10 border-white/15'
                                     }`}
                                 >
@@ -970,8 +995,8 @@ export default function Home() {
                         onClick={startGame}
                         className={`w-full py-4 mt-2 rounded-2xl font-bold text-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] glass-sheen ${
                             setupMode === 'classic'
-                            ? 'bg-gradient-to-r from-cyan-300 to-sky-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]'
-                            : 'bg-gradient-to-r from-violet-300 to-fuchsia-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(167,139,250,0.6)]'
+                            ? 'bg-linear-to-r from-cyan-300 to-sky-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]'
+                            : 'bg-linear-to-r from-violet-300 to-fuchsia-400 text-slate-950 shadow-[0_10px_40px_-10px_rgba(167,139,250,0.6)]'
                         }`}
                     >
                         START GAME
@@ -1005,7 +1030,7 @@ export default function Home() {
                 >
                     <Users className="w-5 h-5 text-cyan-accent" />
                     {(incomingRequests.length + incomingFriendRequests.length) > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-gradient-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
+                        <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-linear-to-br from-rose-400 to-rose-500 text-[11px] font-black text-slate-950 flex items-center justify-center border-2 border-slate-950 shadow-[0_0_10px_rgba(251,113,133,0.5)] animate-pulse">
                             {incomingRequests.length + incomingFriendRequests.length}
                         </span>
                     )}
@@ -1030,33 +1055,33 @@ export default function Home() {
 
   return (
     <GameContainer isExploding={isExploding} difficulty={difficulty}>
-      <header className="w-full flex justify-between items-center mb-2 md:mb-6 px-1 md:px-2 max-w-7xl mx-auto gap-1 md:gap-3">
+      <header className="w-full flex justify-between items-center mb-3 md:mb-6 px-2 max-w-7xl mx-auto gap-2 sm:gap-3 sticky md:static top-0 z-30 py-2 md:py-0">
 
           {/* ── Left HUD Bar ── */}
-          <div className="flex items-stretch bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 shadow-md shadow-black/40 overflow-hidden">
+          <div className="flex items-stretch bg-slate-900/55 md:bg-slate-900/90 backdrop-blur-md md:backdrop-blur-none rounded-2xl border border-slate-600/40 h-11 shadow-md shadow-black/40 overflow-hidden min-w-0">
 
              {/* MENU */}
              <button
                 onClick={leaveRoom}
-                className="flex items-center gap-1 md:gap-2 px-2 md:px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
+                className="flex items-center gap-2 px-2.5 sm:px-4 text-slate-400 hover:text-slate-100 hover:bg-slate-800 border-r border-slate-700/50 transition-colors"
                 title="Back to menu"
              >
-                <ArrowLeft className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span className="text-[10px] md:text-[11px] font-bold tracking-widest uppercase hidden sm:inline">Menu</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline text-[11px] font-bold tracking-widest uppercase">Menu</span>
              </button>
 
              {/* Level (hardcore) — amber accent */}
              {setupMode === 'hardcore' && (
-                 <div className="relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50">
-                     <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-400" />
-                     <span className="text-white font-mono font-bold text-xs md:text-sm tabular-nums">{score + 1}</span>
+                 <div className="relative flex items-center gap-2 px-2.5 sm:px-4 border-r border-slate-700/50">
+                     <Trophy className="w-4 h-4 text-amber-400" />
+                     <span className="text-white font-mono font-bold text-sm tabular-nums">{score + 1}</span>
                      <span className="text-slate-500 text-[10px] font-semibold uppercase hidden sm:block">Lv</span>
                      <div className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-amber-400" />
                  </div>
              )}
 
              {/* Mine Counter — rose accent when negative */}
-             <div className={`relative flex items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 ${
+             <div className={`relative flex items-center gap-2 px-2.5 sm:px-4 border-r border-slate-700/50 ${
                  remainingMines < 0 ? 'bg-rose-500/10' : ''
              }`}>
                  <FlagIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${remainingMines < 0 ? 'text-rose-400 fill-rose-400' : 'text-rose-400/70 fill-rose-400/30'}`} />
@@ -1073,7 +1098,7 @@ export default function Home() {
                  onClick={() => scansAvailable > 0 && setIsScanning(!isScanning)}
                  disabled={scansAvailable <= 0}
                  title="Scanner Tool"
-                 className={`relative flex hover:cursor-pointer items-center gap-1 md:gap-2 px-2 md:px-4 border-r border-slate-700/50 transition-colors ${
+                 className={`relative flex hover:cursor-pointer items-center gap-2 px-2.5 sm:px-4 border-r border-slate-700/50 transition-colors ${
                      isScanning
                          ? 'bg-emerald-500/10 text-emerald-200'
                          : scansAvailable > 0
@@ -1088,38 +1113,22 @@ export default function Home() {
                  )}
              </button>
 
-             {/* Mobile-only: Flag / Reveal toggle */}
-             <button
-                 onClick={() => setFlagMode(!flagMode)}
-                 title={flagMode ? 'Mode Drapeau (tap = flag)' : 'Mode Révéler (tap = reveal)'}
-                 className={`relative flex md:hidden items-center gap-1 px-2 border-r border-slate-700/50 transition-colors ${
-                     flagMode
-                         ? 'bg-rose-500/15 text-rose-300'
-                         : 'text-slate-300 hover:text-white'
-                 }`}
-             >
-                 {flagMode
-                     ? <FlagIcon className="w-3.5 h-3.5 text-rose-400 fill-rose-400/40" />
-                     : <Crosshair className="w-3.5 h-3.5" />
-                 }
-             </button>
-
-             {/* Room ID */}
+             {/* Room ID — visible on every viewport so phones can copy/share */}
              <button
                  onClick={handleCopyRoomId}
-                 className="hidden md:flex hover:cursor-pointer items-center gap-2 px-4 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                 className="flex hover:cursor-pointer items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors min-w-0"
                  title="Copy Room ID"
              >
                  {copied
-                     ? <Check className="w-4 h-4 text-emerald-400" />
-                     : <Copy className="w-4 h-4" />
+                     ? <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                     : <Copy className="w-4 h-4 shrink-0" />
                  }
-                 <span className="font-mono font-bold text-sm tracking-widest">{roomId}</span>
+                 <span className="font-mono font-bold text-xs sm:text-sm tracking-wider sm:tracking-widest truncate">{roomId}</span>
              </button>
           </div>
 
           {/* ── Right: Hearts ── */}
-          <div className="flex items-center gap-1 bg-slate-900/90 rounded-xl md:rounded-2xl border border-slate-600/40 h-9 md:h-11 px-2 md:px-3.5 shadow-md shadow-black/40">
+          <div className="flex items-center gap-1 bg-slate-900/55 md:bg-slate-900/90 backdrop-blur-md md:backdrop-blur-none rounded-2xl border border-slate-600/40 h-11 px-2.5 sm:px-3.5 shadow-md shadow-black/40 shrink-0">
               {[...Array(3)].map((_, i) => (
                   <div
                      key={i}
@@ -1142,16 +1151,21 @@ export default function Home() {
       </header>
 
        {/* GAME BOARD WINDOW */}
-       <div className="w-full flex justify-center">
-            {/* Glass shell — on mobile, allow scroll in both directions instead of squishing */}
+       <div className="w-full flex justify-center px-3 sm:px-0">
+            {/* Glass shell — on mobile, allow scroll in both directions instead of squishing.
+                Width is capped to (100vw - 32px) on phones so the board has clear margin
+                from the screen edges and never overflows the parent padding. */}
             <div
                 ref={boardRef}
-                className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-80px)] md:max-h-none"
-                style={{ width: `min(${boardMaxW}px, 98vw)` }}
+                className="board-scroll glass-strong p-1.5 md:p-5 rounded-xl md:rounded-2xl overflow-auto md:overflow-visible max-h-[calc(100vh-160px)] md:max-h-none"
+                style={{ width: `min(${boardMaxW}px, calc(100vw - 50px))`, touchAction: 'pan-x pan-y' }}
             >
+                {/* Inner clip: only constrain height + clip during the level-up slide
+                    animation. At rest we let the grid size itself naturally so pinch-zoom
+                    can't accidentally clip it via a stale measured height. */}
                 <div
                     className="relative"
-                    style={{ minWidth: boardCols > 10 ? `${boardCols * 32 + (boardCols - 1) * 2}px` : undefined }}
+                    style={isTransitioning ? { overflow: 'hidden', height: boardInnerH || undefined } : undefined}
                 >
                     <motion.div
                         className={`w-full ${isTransitioning ? 'pointer-events-none' : ''}`}
@@ -1167,17 +1181,45 @@ export default function Home() {
                             myRole={myRole}
                             isScanning={isScanning}
                             onScan={() => setIsScanning(false)}
-                            flagMode={flagMode}
+                            mobileFlagMode={mobileFlagMode}
                         />
                     </motion.div>
                 </div>
             </div>
        </div>
 
+      {/* Mobile minimap — auto-hides when the board fits the screen. */}
+      {!isGameOver && !isGameWon && grid.length > 0 && (
+        <MiniMap grid={grid} scrollRef={boardRef} cellPitchPx={32} />
+      )}
+
       <div className="hidden md:flex fixed bottom-4 right-4 text-xs text-slate-500 items-center gap-2 glass px-3 py-1.5 rounded-full">
          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse" />
          Serveur : Connecté
       </div>
+
+      {/* ── Mobile-only flag/click toggle ── plain fixed bottom-right with
+          safe-area-inset so it sits clear of phone notches/rounded corners. */}
+      {!isGameOver && !isGameWon && (
+        <button
+          onClick={() => setMobileFlagMode(m => !m)}
+          aria-pressed={mobileFlagMode}
+          title={mobileFlagMode ? 'Tap = place flag' : 'Tap = reveal cell'}
+          className={`md:hidden fixed bottom-4 right-4 z-50 w-14 h-14 rounded-2xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+              mobileFlagMode
+                  ? 'border-rose-300/40 shadow-[0_0_20px_-4px_rgba(251,113,133,0.55)]'
+                  : 'border-cyan-300/30 shadow-[0_0_20px_-6px_rgba(56,189,248,0.45)]'
+          }`}
+          style={{
+              right: 'max(1rem, env(safe-area-inset-right))',
+              bottom: 'max(1rem, env(safe-area-inset-bottom))',
+          }}
+        >
+          {mobileFlagMode
+              ? <FlagIcon className="w-6 h-6 text-rose-300 fill-rose-300/40" />
+              : <MousePointer2 className="w-6 h-6 text-cyan-accent" />}
+        </button>
+      )}
 
        {/* GAME OVER OVERLAY */}
        <AnimatePresence>

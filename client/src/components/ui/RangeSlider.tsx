@@ -1,4 +1,5 @@
-import React from 'react';
+"use client";
+import React, { useCallback, useRef } from 'react';
 
 interface RangeSliderProps {
   min: number;
@@ -31,6 +32,54 @@ export default function RangeSlider({
     }
   }
 
+  const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  const valueFromClientX = useCallback((clientX: number) => {
+    const el = trackRef.current;
+    if (!el) return value;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return value;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw = min + ratio * (max - min);
+    const steps = Math.round((raw - min) / step);
+    const next = min + steps * step;
+    // Floating-point safety: round to step precision
+    const decimals = (step.toString().split('.')[1] || '').length;
+    const rounded = decimals > 0 ? parseFloat(next.toFixed(decimals)) : next;
+    return Math.max(min, Math.min(max, rounded));
+  }, [min, max, step, value]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    draggingRef.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onChange(valueFromClientX(e.clientX));
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    onChange(valueFromClientX(e.clientX));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    let next = value;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = value - step;
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = value + step;
+    else if (e.key === 'Home') next = min;
+    else if (e.key === 'End') next = max;
+    else return;
+    e.preventDefault();
+    onChange(Math.max(min, Math.min(max, next)));
+  };
+
   return (
     <div className={`w-full ${className}`}>
       {label && (
@@ -44,9 +93,27 @@ export default function RangeSlider({
         </div>
       )}
 
-      <div className="relative w-full h-7 flex items-center group">
+      {/* Wrapper is a tall, generous touch target. Inner track stays slim. */}
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-label={label}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onKeyDown={handleKeyDown}
+        // touch-action: none so a horizontal drag isn't swallowed by the
+        // body-level `pan-x pan-y` that we use to block pinch-zoom.
+        style={{ touchAction: 'none' }}
+        className="relative w-full h-9 flex items-center cursor-pointer select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60 rounded-full"
+      >
         {/* Track Background */}
-        <div className="absolute w-full h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5 backdrop-blur-sm">
+        <div className="absolute left-0 right-0 h-2.5 bg-white/5 rounded-full overflow-hidden border border-white/5 backdrop-blur-sm pointer-events-none">
           {/* Active Track with gradient */}
           <div
             className="h-full rounded-full transition-all duration-150 relative"
@@ -61,7 +128,7 @@ export default function RangeSlider({
         </div>
 
         {/* Dots */}
-        <div className="absolute w-full pointer-events-none">
+        <div className="absolute left-0 right-0 pointer-events-none">
           {dots.map((pos, idx) => (
             <div
               key={idx}
@@ -73,20 +140,9 @@ export default function RangeSlider({
           ))}
         </div>
 
-        {/* Input */}
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-          className="absolute w-full inset-0 opacity-0 cursor-pointer z-10"
-        />
-
         {/* Thumb */}
         <div
-          className="absolute w-5 h-5 rounded-full pointer-events-none transition-all duration-150 -translate-x-1/2"
+          className="absolute w-5 h-5 rounded-full pointer-events-none transition-[left] duration-75 -translate-x-1/2"
           style={{
             left: `${percentage}%`,
             background: 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)',
