@@ -8,6 +8,7 @@ import {
   Eye, EyeOff, MousePointer2, Flag as FlagIcon, ArrowLeft,
 } from "lucide-react";
 import RangeSlider from "@/components/ui/RangeSlider";
+import HexMiniMap from "@/components/HexMiniMap";
 
 type Orientation = "pointy" | "flat";
 type OrientChoice = "pointy" | "flat" | "random";
@@ -704,12 +705,23 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
 
   // Mobile-only: toggle between reveal-on-tap and flag-on-tap
   const [mobileFlagMode, setMobileFlagMode] = useState(false);
+  const [minimapVisible, setMinimapVisible] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lpRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLP = useRef(false);
   const tMoved = useRef(false);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  // Track mobile viewport
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const cfg = useMemo(() => {
     const cols = settings.cols;
@@ -939,15 +951,15 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
   const livesRemaining = settings.mistakesAllowed < 0 ? -1 : Math.max(0, settings.mistakesAllowed - mistakes + 1);
 
   return (
-    <div className="flex flex-col items-center min-h-screen p-2 pt-3 pb-20 md:p-4 md:pt-6 md:pb-10 w-full">
+    <div className="flex flex-col items-center min-h-screen p-2 pt-3 pb-20 md:p-4 md:pt-6 md:pb-10 w-full overflow-hidden">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute top-[-10%] left-[-5%] w-[40rem] h-[40rem] rounded-full bg-violet-500/15 blur-[120px] animate-float-blob" />
         <div className="absolute top-[20%] right-[-10%] w-[35rem] h-[35rem] rounded-full bg-cyan-500/15 blur-[120px] animate-float-blob" style={{ animationDelay: "-5s" }} />
         <div className="absolute bottom-[-10%] left-[25%] w-[40rem] h-[40rem] rounded-full bg-emerald-500/12 blur-[120px] animate-float-blob" style={{ animationDelay: "-9s" }} />
       </div>
 
-      {/* HUD */}
-      <div className="w-full max-w-6xl mb-2 md:mb-3">
+      {/* HUD — sticky, floats above the board */}
+      <div className="w-full max-w-6xl mb-2 md:mb-3 sticky top-0 z-30">
         {/* Desktop HUD — capsule style */}
         <div className="hidden md:flex hud-capsule hud-border-shimmer rounded-2xl px-4 py-3 items-center justify-between relative overflow-hidden">
           <button
@@ -1325,15 +1337,23 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
         style={{ maxWidth: `min(99vw, ${Math.max(svgW + 24, 480)}px)`, width: "100%" }}
       >
       <div
-        className="relative overflow-hidden rounded-xl md:rounded-2xl border border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] w-full"
+        ref={boardRef}
+        className="board-scroll relative overflow-auto rounded-xl md:rounded-2xl border border-white/[0.08] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] w-full max-h-[calc(100vh-200px)] md:max-h-[calc(100vh-180px)]"
+        style={{ touchAction: 'pan-x pan-y' }}
       >
         {/* Animated gradient background — drifts top-left → bottom-right */}
-        <div className="hex-board-bg absolute inset-0" style={{ borderRadius: "inherit" }} />
+        <div className="hex-board-bg absolute inset-0 pointer-events-none" style={{ borderRadius: "inherit", minWidth: isMobile ? svgW * 1.2 + 12 : undefined, minHeight: isMobile ? svgH * 1.2 + 12 : undefined }} />
         <div className="relative p-0.5 md:p-1.5">
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
           preserveAspectRatio="xMidYMid meet"
-          style={{ width: "100%", height: "auto", display: "block", touchAction: "manipulation" }}
+          style={{
+            width: isMobile ? Math.max(svgW * 1.2, 480) : "100%",
+            height: "auto",
+            display: "block",
+            touchAction: "pan-x pan-y",
+            minWidth: isMobile ? Math.max(svgW * 1.2, 480) : undefined,
+          }}
           onContextMenu={e => e.preventDefault()}
         >
           <defs>
@@ -1559,6 +1579,10 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
       </div>
       </motion.div>
 
+      {/* Hex minimap — auto-hides when board fits */}
+      {grid && gameState !== "won" && gameState !== "lost" && minimapVisible && (
+        <HexMiniMap grid={grid} scrollRef={boardRef} orient={orient} />
+      )}
 
       {/* New game */}
       <button
@@ -1653,6 +1677,21 @@ export default function HexGame({ onBack }: { onBack: () => void }) {
             bottom: 'max(1rem, env(safe-area-inset-bottom))',
           }}
         >
+          {/* Minimap show/hide */}
+          <button
+            onClick={() => setMinimapVisible(v => !v)}
+            aria-pressed={minimapVisible}
+            title={minimapVisible ? 'Masquer la minimap' : 'Afficher la minimap'}
+            className={`w-12 h-12 rounded-xl glass-strong flex items-center justify-center active:scale-95 transition-all border ${
+                minimapVisible
+                    ? 'border-slate-400/30 shadow-[0_0_14px_-4px_rgba(148,163,184,0.35)]'
+                    : 'border-slate-500/20 shadow-[0_0_14px_-4px_rgba(100,116,139,0.25)]'
+            }`}
+          >
+            {minimapVisible
+                ? <EyeOff className="w-5 h-5 text-slate-300" />
+                : <Eye className="w-5 h-5 text-slate-400" />}
+          </button>
           {/* Flag / Reveal toggle */}
           <button
             onClick={() => setMobileFlagMode(m => !m)}
